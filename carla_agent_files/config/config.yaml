@@ -1,0 +1,40 @@
+defaults:
+  # - user: max_mustermann
+  - experiments: detr
+  - eval: longest6
+
+tr_type: null
+save_gif: False
+# save_vis: 0
+# save_lane: 0
+# save_hdmap: 0
+host: localhost
+# host: 0.0.0.0
+port: 2000
+trafficManagerPort: 8000
+trafficManagerSeed: 0
+dataProviderSeed: 0
+debug: 0
+viz: 0
+record: ''
+# timeout: 600.0
+timeout: 600.0
+
+hydra:
+  run:
+    dir: ${save_path}
+    # ${now:%Y-%m-%d_%H-%M}
+
+repetitions: 1
+track: MAP
+resume: 0
+save_path: save_path
+
+
+log_save_path: ${hydra:run.dir}/result_logs
+
+checkpoint_rel: checkpoint.json
+checkpoint: ${hydra:run.dir}/${checkpoint_rel}
+
+DEBUG_CHALLENGE: 0
+CUDA_VISIBLE_DEVICES: 0

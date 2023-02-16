@@ -1,0 +1,6 @@
+BENCHMARK: longest6
+name: longest6
+route_rel: leaderboard/data/longest6/longest6_sub/3.xml
+routes: ${eval.route_rel}
+scenarios_rel: leaderboard/data/longest6/eval_scenarios.json
+scenarios: ${eval.scenarios_rel}

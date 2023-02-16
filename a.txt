@@ -1,0 +1,2 @@
+  PID TTY      STAT   TIME COMMAND
+26972 pts/7    Rl+    8:24 python leaderboard/scripts/run_evaluation.py experiments=detr eval=longest6 save_path=output/simu_15_split +mmdet_cfg=projects/configs/detr3d/nu_carla_v2.py +weight=work_dirs/ndetr_hdmap/epoch_15.pth +SAVE_SENSORS=1 eval.route_rel=leaderboard/data/longest6/longest6_split/longest_weathers_23.xml trafficManagerPort=8000 port=2000 checkpoint=cp_0.json

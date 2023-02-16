@@ -1,0 +1,60 @@
+{
+  "user": {
+    "working_dir": "/home/geiger/krenz73/coding/02_sequential_driving/release/plant"
+  },
+  "model": {
+    "name": "PlanT",
+    "training": {
+      "max_epochs": 49,
+      "batch_size": 32,
+      "learning_rate": 0.0001,
+      "betas": [
+        0.9,
+        0.95
+      ],
+      "grad_norm_clip": 1.0,
+      "weight_decay": 0.1,
+      "ckpt_path": "log/",
+      "num_workers": 8,
+      "pred_len": 4,
+      "seq_len": 1,
+      "max_NextRouteBBs": 2,
+      "input_ego": false,
+      "remove_velocity": "None",
+      "route_only_wp": false,
+      "remove_back": false,
+      "pretraining_path": "none",
+      "add_noise": false
+    },
+    "pre_training": {
+      "pretraining": "forecast",
+      "multitask": true,
+      "forecastLoss_weight": 0.2,
+      "future_timestep": 1,
+      "quantize": true,
+      "precision_pos": 7,
+      "precision_speed": 4,
+      "precision_angle": 5
+    },
+    "network": {
+      "hf_checkpoint": "prajjwal1/bert-medium",
+      "embd_pdrop": 0.1
+    }
+  },
+  "exp_folder_name": "1_PlanT_release",
+  "lrDecay_epoch": 45,
+  "seed": 1234,
+  "debug": false,
+  "visualize": true,
+  "overfit": 0,
+  "resume": true,
+  "use_caching": true,
+  "custom_sampler": false,
+  "gpus": 4,
+  "trainset_size": 3,
+  "benchmark": "longest6",
+  "expname": "20_multitask_forecasting",
+  "wandb_name": "training_pamidata_onlybrakeloss_benchmark=longest6_custom_sampler=False_data_dir=/home/geiger/krenz73/coding/02_sequential_driving/release/plant/data/carla/pami_bb_dataset_27_09_22_v4_1_exp_folder_name=1_PlanT_release_gpus=4_lrDecay_epoch=45_model.network.hf_checkpoint=prajjwal1/bert-medium_model.pre_training.forecastLoss_weight=0.2_model.pre_training.future_timestep=1_model.pre_training.multitask=True_model.pre_training.pretraining=forecast_model.training.add_noise=False_model.training.batch_size=32_model.training.input_ego=False_model.training.learning_rate=0.0001_model.training.max_NextRouteBBs=2_model.training.max_epochs=49_model.training.num_workers=8_model.training.remove_back=False_model.training.remove_velocity=None_model.training.route_only_wp=False_model=PlanT_resume=True_seed=1234_trainset_size=3_use_caching=True",
+  "save_dir": "/mnt/qb/work/geiger/krenz73/coding/02_sequential_driving/release/plant/outputs/1_PlanT_release/20_multitask_forecasting/multitask_forecasting_wp/trainset_size_3/future_timestep_1/forecastLoss_weight_0.2/lrDecay_epoch_45/input_egoFalse/remove_velocity_None/route_only_wp_False/remove_back_False/maxRoutes_2/gpus_4/custom_sampler_False/lr_0.0001_bs32/hf_checkpoint_prajjwal1/bert-medium/seed_1234",
+  "data_dir": "/home/geiger/krenz73/coding/02_sequential_driving/release/plant/data/carla/pami_bb_dataset_27_09_22_v4_1"
+}
