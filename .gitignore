@@ -30,8 +30,6 @@ __pycache__/
 /.local*
 /work_dirs*
 /checkpoints*
-/projects/configs/detr3d/new/cc.py
-/projects/configs/detr3d/new/debug.py
 /*.mp4
 /save_dir
 

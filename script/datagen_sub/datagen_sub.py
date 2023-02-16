@@ -21,11 +21,11 @@ port_dict = {0:'00',1:'10',2:'20',3:'30'}
 cmds=mmcv.list_from_file('script/datagen_sub/datagen.sh')
 
 for idx in range(70): # TODO
-    if idx>=50:
-        break
+    if idx<=20:
+        continue
     res = idx % 4
     port = port_dict[res]
-    cmd = cmds[idx] + f' experiments.DATAGEN=1 +SAVE_SENSORS=1 trafficManagerPort=80{port} port=20{port}'
+    cmd = cmds[idx] + f' experiments.DATAGEN=1 trafficManagerPort=80{port} port=20{port}'
     evalx[res].append(cmd)
 
 # mmcv.save('\n'.join(eval1),file='script/eval_sub/eval1.sh',file_format='txt')
