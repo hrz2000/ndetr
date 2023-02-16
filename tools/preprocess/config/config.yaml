@@ -1,0 +1,39 @@
+defaults:
+  - user: max_mustermann
+  - model: PlanT
+
+
+exp_folder_name: training
+hydra:
+  run:
+    dir: ./data
+  # job:
+  #   config:
+  #     override_dirname:
+  #       exclude_keys:
+  #         - expname
+  #       kv_sep: '='
+  #       item_sep: '_'
+
+
+lrDecay_epoch: 46
+
+
+seed: 1234
+debug: False
+visualize: True
+overfit: 0
+resume: True
+use_caching: True
+custom_sampler: False
+gpus: 1
+trainset_size: 1
+benchmark: longest6
+
+# expname: DEBUG
+# wandb_name: training_PlanT_${hydra:job.override_dirname}
+# save_dir: ${hydra:run.dir}
+
+data_dir: output/plant_datagen/PlanT_data_1
+# data_dir: /home/BuaaClass01/hrz/plant/data/carla/PlanT_data_1
+
