@@ -1,0 +1,35 @@
+defaults:
+  # - user: max_mustermann
+  - model: PlanT
+
+tr_type: null
+load_from: null
+exp_folder_name: training
+hydra:
+  run:
+    dir: ${save_dir}
+
+lrDecay_epoch: 46
+cp_dirpath: ${hydra:run.dir}/checkpoints
+resume_path: ${hydra:run.dir}/checkpoints/last.ckpt
+
+seed: 1234
+debug: False
+visualize: False
+overfit: 0
+resume: True
+# use_caching: True
+use_caching: False
+custom_sampler: False
+gpus: 4
+# trainset_size: 3
+trainset_size: 1
+benchmark: longest6
+
+expname: DEBUG
+wandb_name: training_PlanT_wandb
+save_dir:  work_dirs/plant/${now:%Y-%m-%d_%H-%M-%S}
+
+# data_dir: ${user.working_dir}/data/PlanT/PlanT_data_1 # Path to the data directory of the first part of the dataset (ending '_1')
+data_dir: output/plant_datagen/PlanT_data_1
+
