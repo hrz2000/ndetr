@@ -222,10 +222,6 @@ class CustomNuScenesDataset(Custom3DDataset):
                 break
             
         cam2imgs = lidar2img_rts
-            
-        ann_info = None
-        if not self.test_mode:
-            ann_info = self.get_ann_info(index, cam2imgs) # 这里面进行了过滤
 
         plan=info['plan']
         fv_path = image_paths[0]
@@ -240,6 +236,10 @@ class CustomNuScenesDataset(Custom3DDataset):
             
         attnmap_path = fv_path.replace('rgb', 'attnmap').replace('png','pkl')
         attn_info = mmcv.load(attnmap_path, file_format='pkl') # dict_keys(['attn_map', 'input_idx', 'output_idx', 'output_disappear', 'output_label_path'])
+            
+        ann_info = None
+        if not self.test_mode:
+            ann_info = self.get_ann_info(index, cam2imgs, attn_info) # 这里面进行了过滤
 
         input_dict = dict(
             # sample_idx=info['sample_idx'],
@@ -264,10 +264,28 @@ class CustomNuScenesDataset(Custom3DDataset):
         
         return input_dict
 
-    def get_ann_info(self, index, cam2imgs):
+    def get_ann_info(self, index, cam2imgs, attn_info): # 只要保证经过这个东西之后，attn_weight和还是1就行
         # get_data_info里面没有对gt_idxs等进行过滤处理
-
         info = self.data_infos[index]
+
+        ## attn
+        attnmap = attn_info['attn_map'] # (8, 8, 42, 42)
+        input_idx = attn_info['input_idx'] # 21
+        output_idx = attn_info['output_idx'] # 理论上inp和oup的idx是完全一样的
+        # 后面的0,1代表route的idx
+        assert len(input_idx) == len(output_idx)
+        output_disappear = attn_info['output_disappear']
+        
+        len_box_route = len(input_idx)
+        len_attn = 1 + len_box_route + 1 # TODO:需要增加对第二个route的attn_loss
+        len_box = len(output_disappear) # 21
+        plant_gt_idxs = input_idx[:len_box] # bugfix：注意这里没有cls_emb
+        len_route = len_box_route - len_box
+        # 让预测跟着gt走就行
+        # init_box_num = len(info['gt_boxes'])
+        # boxes_id = list(range(init_box_num)) # TODO: 目前两个gt不一样，导致后面mask是不对的
+        # attnmap和plant_gt_idxs是一致的
+        # gt_idxs和其他是一致的
         
         if self.use_valid_flag:
             mask = info['valid_flag']
@@ -276,6 +294,7 @@ class CustomNuScenesDataset(Custom3DDataset):
         gt_bboxes_3d = info['gt_boxes'][mask] # (66, 9)
         gt_names_3d = info['gt_names'][mask] #类别名字
         gt_idxs = info['gt_idxs'][mask] #类别名字
+        # boxes_id = np.array(boxes_id)[mask] # 必须是np才能用yes/no进行筛选
         gt_labels_3d = []
         for cat in gt_names_3d:
             if cat in self.CLASSES:
@@ -294,12 +313,48 @@ class CustomNuScenesDataset(Custom3DDataset):
         gt_labels_3d = gt_labels_3d[valid_mask]
         gt_names_3d = gt_names_3d[valid_mask]
         gt_idxs = gt_idxs[valid_mask]
+        # boxes_id = boxes_id[valid_mask]
+        
+        # 这个时候找gt_idxs和plant_gt_idxs的共同之处
+        pl_new_idxs = []
+        for idx in gt_idxs:
+            # import pdb;pdb.set_trace()
+            idx_pl = np.where(plant_gt_idxs==idx)[0]
+            if idx_pl.shape[0] == 0:
+                pl_new_idxs.append(-1)
+            else:
+                idx_pl = idx_pl.item()
+                pl_new_idxs.append(idx_pl+1) # 前面有wp_emb
+        
+        # import pdb;pdb.set_trace()
+        # pl_exists_idxs = np.array(pl_new_idxs)[pl_new_idxs!=-1][0] # pl有我没有的先不管
+        pl_exists_idxs = np.array(pl_new_idxs)
+        
+        if len_box_route==1:
+            pl_map_idxs = [0, *(pl_exists_idxs.tolist()), len_box_route]
+        else:
+            pl_map_idxs = [0, *(pl_exists_idxs.tolist()), len_box_route-1, len_box_route]
+        
+        attnmap = attnmap[:,:,pl_map_idxs][:,:,:,pl_map_idxs] # (8, 8, 13, 13)
+        # 现在attnmap是1+box+route+1
+        # gt_idxs于此无关，我们希望是一样的
+        # 如果想修改成和gt一样的格式，需要把-1的位置给填充成别的东西
+        import pdb;pdb.set_trace()
+        no_my_gt = np.array(pl_new_idxs)[pl_new_idxs==-1]
+        attnmap[:,:,no_my_gt][:,:,:,no_my_gt] = -1 # 完全按照gt_idx顺序，前面多一个cls_emb，后面多route
+        
+        wp_attn = attnmap[-1,1,0,:] # wp对所有（wp、box、route）
+        # 我们需要把wp_attn补全到和gt_idxs一样的格式
+        # 对gt可视化的时候，前面concat上了ego
+        # 第一个box其实是在idx=2的位置开始
     
         anns_results = dict(
             gt_bboxes_3d=gt_bboxes_3d,
             gt_labels_3d=gt_labels_3d,
             gt_names=gt_names_3d,
             gt_idxs=gt_idxs,
+            wp_attn=wp_attn,
+            attnmap=attnmap,
             ego_box_3d=ego_box_3d
         )
         return anns_results
@@ -311,6 +366,8 @@ class CustomNuScenesDataset(Custom3DDataset):
         ego_box_3d = anns_results['ego_box_3d']
         gt_labels_3d = anns_results['gt_labels_3d'] # 这里是没有过滤的
         gt_names = anns_results['gt_names']
+        gt_idxs = anns_results['gt_idxs']
+        wp_attn = anns_results['wp_attn']
         
         cam2img = data_info['cam2imgs'][0]
         imgpath = data_info['img_filename'][0] # TODO
@@ -319,6 +376,9 @@ class CustomNuScenesDataset(Custom3DDataset):
             boxes_3d=LiDARInstance3DBoxes.cat([ego_box_3d, gt_bboxes_3d]),
             scores_3d=np.ones_like([1,*gt_labels_3d]),
             labels_3d=np.array([1,*gt_labels_3d]),
+            gt_idxs=np.array([0,*gt_idxs]),
+            wp_attn=np.array([0,*wp_attn]),
+            
             attrs_3d=data_info['plan']['wp'],
             tp=data_info['plan']['tp'],
             light=data_info['plan']['light'],
@@ -330,7 +390,6 @@ class CustomNuScenesDataset(Custom3DDataset):
             imgpath=imgpath,
             # gt_bev=data_info['topdown_path']
             # gt_bev=data_info['topdown_path']
-            wp_attn=None,
             topdown=None,#可视化的时候要用
             hdmap=None
         )

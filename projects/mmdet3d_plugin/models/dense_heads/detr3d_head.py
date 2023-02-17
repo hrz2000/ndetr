@@ -478,6 +478,7 @@ class Detr3DHead(DETRHead):
         
         outs=dict(all_cls_scores=outputs_classes, all_bbox_preds=outputs_coords)
         batch_pts_boxes = self.get_bboxes(outs=outs, img_metas=img_metas, for_aux_outs=True)
+        # 这里会获取一次box
         
         # 计算未来时刻的box位置、预测waypoint
         outputs_wps = []
@@ -513,6 +514,7 @@ class Detr3DHead(DETRHead):
             'inter_attnmap': inter_attnmap,
             'attnmap': inter_attnmap,
         }
+        # 还会根据这些信息再次获取box
         return outs, hs
 
     def get_box_batch(self, batch_pts_boxes):
@@ -772,7 +774,7 @@ class Detr3DHead(DETRHead):
         losses_cls, losses_bbox, new_gt_idxs_list_layers = multi_apply(
             self.loss_single, all_cls_scores, all_bbox_preds,
             all_gt_bboxes_list, all_gt_labels_list, all_gt_idxs_list,
-            all_gt_bboxes_ignore_list)
+            all_gt_bboxes_ignore_list) # 只在计算loss的时候才进行了new_gt_idxs的计算，怎么把它放到box里面里面
 
         losses = {}
         
@@ -840,7 +842,7 @@ class Detr3DHead(DETRHead):
                 for i, obj_idx in enumerate(input_idx):
                     # 这个for循环，似乎无法写成一句话
                     # idx = torch.where(last_layer_batchi_gt==obj_idx)[0] # tuple里面只有一个元素
-                    idx = torch.nonzero(last_layer_batchi_gt==obj_idx)
+                    idx = torch.nonzero(last_layer_batchi_gt==obj_idx) # 是50个里面选，进行索引
                     # torch.Size([50]) int -> (x, 1)
                     if len(idx) == 1:
                         gt_i = i+1
@@ -881,7 +883,7 @@ class Detr3DHead(DETRHead):
                 # self.loss_update(losses, loss_attnmap, 'attnmap')
                 losses.update({'attnmap_loss': loss_attnmap*self.loss_weights.loss_attnmap})
                 
-        return losses
+        return losses, new_gt_idxs_list_layers
     
     def loss_update(self, losses, losses_x, type_str):
         # TODO: 判断losses的shape
@@ -1011,7 +1013,9 @@ class Detr3DHead(DETRHead):
             scores = preds['scores'] # torch.Size([300])
             labels = preds['labels'] # torch.Size([300])
             wp_attn = preds['wp_attn'] # torch.Size([300])
-            ret_list.append([bboxes, scores, labels, wp_attn])
+            wp_attn = preds['wp_attn'] # torch.Size([300])
+            matched_idxs = preds['matched_idxs']
+            ret_list.append([bboxes, scores, labels, wp_attn, matched_idxs])
         
         if for_aux_outs:
             return [dict(
@@ -1019,11 +1023,12 @@ class Detr3DHead(DETRHead):
                 scores_3d=scores,
                 labels_3d=labels,
                 wp_attn=wp_attn,
+                matched_idxs=matched_idxs,
                 # attrs_3d=outs['all_wp_preds'][-1][i] # 每个bs的最后一层
-            ) for i, (bboxes, scores, labels, wp_attn) in enumerate(ret_list)]
+            ) for i, (bboxes, scores, labels, wp_attn, matched_idxs) in enumerate(ret_list)]
         
         bbox_results = []
-        for i, (bboxes, scores, labels, wp_attn) in enumerate(ret_list):
+        for i, (bboxes, scores, labels, wp_attn, matched_idxs) in enumerate(ret_list):
             attrs = None
             refine_wp = None
             route_wp = None
@@ -1048,6 +1053,7 @@ class Detr3DHead(DETRHead):
                 scores_3d=scores.cpu(),
                 labels_3d=labels.cpu(),
                 attrs_3d=attrs,
+                matched_idxs=matched_idxs,
                 refine_wp=refine_wp,
                 route_wp=route_wp,
                 iscollide=iscollide, 

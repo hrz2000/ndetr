@@ -265,7 +265,9 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
     origin = (size[0]//2, size[1]//2)
 
     gt_bbox = gt_pts_bbox.get('boxes_3d', None)
-    gt_wp_attn = gt_pts_bbox.get('gt_wp_attn', None)
+    gt_wp_attn = gt_pts_bbox.get('wp_attn', None)
+    gt_idxs = gt_pts_bbox.get('gt_idxs', None)
+    matched_idxs = pred_pts_bbox.get('matched_idxs', None)
     pred_bbox = pred_pts_bbox.get('boxes_3d', None)
     wp_attn = pred_pts_bbox.get('wp_attn', None)
     for box_type_idx, (bbox, c) in enumerate([(gt_bbox,"chartreuse"), (pred_bbox,"dodgerblue")]):
@@ -303,9 +305,17 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
                 draw.line((endx1, endy1, endx2, endy2), fill=fill_c, width=1)
                 
                 if box_type_idx==1: # 预测
-                    if wp_attn is None:
-                        continue
-                    draw.text((endx1, endy1), f"({wp_attn[idx]:.2f})",fill='red')
+                    if wp_attn is not None:
+                        draw.text((endx1+30, endy1), f"{wp_attn[idx]:.2f}", fill='red')
+                    if matched_idxs is not None:
+                        draw.text((endx1+30+30, endy1), f"{int(matched_idxs[idx])}", fill='red')
+                else:
+                    if gt_wp_attn is not None:
+                        # gt_wp_attn比gt_idxs多一些，因为由对route的attn
+                        # import pdb;pdb.set_trace()
+                        draw.text((endx1+30+60, endy1), f"{gt_wp_attn[idx+1]:.2f}", fill='green') # 第一个东西不是随便添加的，是cls_emb对自己的
+                    if gt_idxs is not None:
+                        draw.text((endx1+30+90, endy1), f"{int(gt_idxs[idx])}", fill='green') 
     
     gt_wp = copy.deepcopy(gt_pts_bbox.get('attrs_3d', None))
     pred_wp = copy.deepcopy(pred_pts_bbox.get('attrs_3d', None))

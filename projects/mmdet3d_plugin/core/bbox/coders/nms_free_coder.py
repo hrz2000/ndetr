@@ -36,7 +36,7 @@ class NMSFreeCoder(BaseBBoxCoder):
     def encode(self):
         pass
 
-    def decode_single(self, cls_scores, bbox_preds, attnmap, no_filter):
+    def decode_single(self, cls_scores, bbox_preds, attnmap, new_gt_idxs_list, no_filter):
         """Decode bboxes.
         Args:
             cls_scores (Tensor): Outputs from the classification head, \
@@ -64,6 +64,14 @@ class NMSFreeCoder(BaseBBoxCoder):
             wp_attn = wp_attn[bbox_index]
         else:
             wp_attn = None
+            
+        if new_gt_idxs_list is not None:
+            new_gt_idxs_list = new_gt_idxs_list[bbox_index] 
+            # new_gt_idxs_list是预测的50个box和gt的1对1匹配，可能有的没有匹配上gt
+            # 这里的bbox_index是进行了置信度过滤等等操作，是说对50个里面的整体。
+            # import pdb;pdb.set_trace()
+        else:
+            new_gt_idxs_list = None
 
         final_box_preds = denormalize_bbox(bbox_preds, self.pc_range) # torch.Size([300, 9])
         # final_box_preds = bbox_preds
@@ -95,11 +103,16 @@ class NMSFreeCoder(BaseBBoxCoder):
             boxes3d = final_box_preds[mask]
             scores = final_scores[mask]
             labels = final_preds[mask]
+            if wp_attn is not None:
+                wp_attn = wp_attn[mask]
+            if new_gt_idxs_list is not None:
+                new_gt_idxs_list = new_gt_idxs_list[mask]
             predictions_dict = {
                 'bboxes': boxes3d,
                 'scores': scores,
                 'labels': labels,
-                'wp_attn': wp_attn
+                'wp_attn': wp_attn,
+                'matched_idxs': new_gt_idxs_list
             }
             # 所以可能少于300个
 
@@ -128,9 +141,15 @@ class NMSFreeCoder(BaseBBoxCoder):
             # 均拿出最后一层的结果
         else:
             attnmap = [None for i in range(len(all_bbox_preds))]
+            
+        if 'new_gt_idxs_list_layers' in preds_dicts:
+            new_gt_idxs_list = preds_dicts['new_gt_idxs_list_layers'][-1] # 均拿出最后一层的结果
+            # import pdb;pdb.set_trace()
+        else:
+            new_gt_idxs_list = [None for i in range(len(all_bbox_preds))]
         
         batch_size = all_cls_scores.size()[0]
         predictions_list = []
         for i in range(batch_size):
-            predictions_list.append(self.decode_single(all_cls_scores[i], all_bbox_preds[i], attnmap[i], no_filter))
+            predictions_list.append(self.decode_single(all_cls_scores[i], all_bbox_preds[i], attnmap[i], new_gt_idxs_list[i], no_filter))
         return predictions_list

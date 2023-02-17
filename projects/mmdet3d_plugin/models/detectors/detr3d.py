@@ -250,13 +250,14 @@ class Detr3D(MVXTwoStageDetector):
         outs, hs = self.pts_bbox_head(pts_feats, img_metas, prev_query=prev_query)
         if gt_bboxes_3d is not None:
             loss_inputs = [img_metas, gt_bboxes_3d, gt_labels_3d, outs]
-            losses = self.pts_bbox_head.loss(*loss_inputs)
+            losses, new_gt_idxs_list_layers = self.pts_bbox_head.loss(*loss_inputs)
+            outs['new_gt_idxs_list_layers'] = new_gt_idxs_list_layers ## 放到这里了
         else:
             losses = {}
         return dict(
             hs=hs,
             outs=outs,
-            losses=losses
+            losses=losses,
         )
         
     # def his2future_queries(self, his_queries_list):
