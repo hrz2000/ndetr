@@ -25,10 +25,10 @@ for idx in range(70): # TODO
         continue
     res = idx % 4
     port = port_dict[res]
-    cmd = cmds[idx] + f' trafficManagerPort=80{port} port=20{port}'
+    cmd = f'CUDA_VISIBLE_DEVICES={res} ' + cmds[idx] + f' trafficManagerPort=80{port} port=20{port}'
     evalx[res].append(cmd)
 
 # mmcv.save('\n'.join(eval1),file='script/eval_sub/eval1.sh',file_format='txt')
 for i in range(num):
-    with open(f'script/datagen_sub/datagen{i}.sh', 'w') as f:
+    with open(f'script/datagen_sub/_datagen{i}.sh', 'w') as f:
         f.write('\n'.join(evalx[i]))

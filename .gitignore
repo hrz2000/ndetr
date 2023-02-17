@@ -33,6 +33,8 @@ __pycache__/
 /*.mp4
 /save_dir
 /script/*/*.txt
+/script/datagen_sub/_*
+/script/eval_sub/_*
 
 # C extensions
 *.so
