@@ -19,7 +19,10 @@ track='MAP'
 port_dict = {0:'00',1:'10',2:'20',3:'30'}
 
 for idx in range(36):
-    res = idx % 4
+    todolist = [8,24,28,30,31,32,33,34,35]
+    if idx not in todolist:
+        continue
+    res = todolist.index(idx) % 4
     port = port_dict[res]
     route_rel=f'leaderboard/data/longest6/longest6_split/longest_weathers_{idx}.xml'
     scenarios_rel='leaderboard/data/longest6/eval_scenarios.json'
@@ -39,9 +42,5 @@ for idx in range(36):
 
 # mmcv.save('\n'.join(eval1),file='script/eval_sub/eval1.sh',file_format='txt')
 for i in range(num):
-<<<<<<< HEAD
-    with open(f'script/eval_sub/eval{i}.sh', 'w') as f:
-=======
     with open(f'script/eval_sub/_eval{i}.sh', 'w') as f:
->>>>>>> b46f7ebbe7c44d2a73c2fcbc87bae9c47a21b9d7
         f.write('\n'.join(evalx[i]))
