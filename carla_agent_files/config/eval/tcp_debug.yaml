@@ -1,0 +1,6 @@
+BENCHMARK: tcp
+name: tcp
+route_rel: leaderboard/data/tcp_data/validation_routes/routes_town05_tiny.xml
+routes: ${eval.route_rel}
+scenarios_rel: leaderboard/data/tcp_data/scenarios/all_towns_traffic_scenarios.json
+scenarios: ${eval.scenarios_rel}
