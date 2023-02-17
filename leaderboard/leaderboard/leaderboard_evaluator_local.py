@@ -224,7 +224,7 @@ class LeaderboardEvaluator(object):
         """
         Load a new CARLA world and provide data to CarlaDataProvider
         """
-
+        print(town)
         self.world = self.client.load_world(town)
 
         settings = self.world.get_settings()

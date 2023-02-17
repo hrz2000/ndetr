@@ -24,7 +24,7 @@ for idx in range(36):
     route_rel=f'leaderboard/data/longest6/longest6_split/longest_weathers_{idx}.xml'
     scenarios_rel='leaderboard/data/longest6/eval_scenarios.json'
     
-    base=f'python leaderboard/scripts/run_evaluation.py experiments={experiments} eval.route_rel={route_rel} eval.scenarios_rel={scenarios_rel}'
+    base=f'CUDA_VISIBLE_DEVICES={res} python leaderboard/scripts/run_evaluation.py experiments={experiments} eval.route_rel={route_rel} eval.scenarios_rel={scenarios_rel}'
     # data_save_path_rel是save_path下面数据保存的地方，避免保存到同一个地方
     
     exp = f"experiments.DATAGEN={datagen} experiments.unblock={unblock}" # plant需要在exp里面设置model_path
@@ -39,5 +39,9 @@ for idx in range(36):
 
 # mmcv.save('\n'.join(eval1),file='script/eval_sub/eval1.sh',file_format='txt')
 for i in range(num):
+<<<<<<< HEAD
     with open(f'script/eval_sub/eval{i}.sh', 'w') as f:
+=======
+    with open(f'script/eval_sub/_eval{i}.sh', 'w') as f:
+>>>>>>> b46f7ebbe7c44d2a73c2fcbc87bae9c47a21b9d7
         f.write('\n'.join(evalx[i]))

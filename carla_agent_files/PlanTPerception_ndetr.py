@@ -534,7 +534,7 @@ class PlanTPerceptionAgent(autonomous_agent.AutonomousAgent):
             if 'hd_map' in input_data.keys():
                 self._init(input_data['hd_map'])
             else:
-                # import pdb;pdb.set_trace() 
+                # import pdb;pdb.set_trace()
                 return carla.VehicleControl(steer=0.0, throttle=0.0, brake=1.0)
             
             # self._init()

@@ -1190,6 +1190,7 @@ def time_and_vis(self, inp_dict, gt_pts_bbox, pred_pts_bbox={}):
     global last_time
     this_time = time.time()
     print(f"frame: {frame}, use time {(this_time-last_time):.2f}s")
+    sys.stdout.flush()
     last_time = this_time
 
     plan = inp_dict['img_metas'][0]['plan']
