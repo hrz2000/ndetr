@@ -16,14 +16,15 @@ save_path='output/output/detr_eval_split' + "/" + time.strftime('%Y-%m-%d_%H:%M:
 config="projects/configs/detr3d/new/bs_box.py"
 checkpoint='work_dirs/bs_box/2023-02-15_21:51:35/epoch_18.pth'
 track='MAP'
-port_dict = {0:'00',1:'10',2:'20',3:'30'}
 
 for idx in range(36):
     todolist = [8,24,28,30,31,32,33,34,35]
     if idx not in todolist:
         continue
-    res = todolist.index(idx) % 4
-    port = port_dict[res]
+    sub_idx = todolist.index(idx)
+    res = sub_idx % 4
+    port = f"{res}0"
+
     route_rel=f'leaderboard/data/longest6/longest6_split/longest_weathers_{idx}.xml'
     scenarios_rel='leaderboard/data/longest6/eval_scenarios.json'
     
@@ -38,7 +39,8 @@ for idx in range(36):
     cmd = [base, exp, port_para, save_para, mm_para, run_para]
     cmd = " ".join(cmd)
     
-    evalx[res].append(cmd)
+    bucket = sub_idx % num
+    evalx[bucket].append(cmd)
 
 # mmcv.save('\n'.join(eval1),file='script/eval_sub/eval1.sh',file_format='txt')
 for i in range(num):
