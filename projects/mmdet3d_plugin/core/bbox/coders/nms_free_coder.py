@@ -36,7 +36,7 @@ class NMSFreeCoder(BaseBBoxCoder):
     def encode(self):
         pass
 
-    def decode_single(self, cls_scores, bbox_preds, no_filter):
+    def decode_single(self, cls_scores, bbox_preds, attnmap, no_filter):
         """Decode bboxes.
         Args:
             cls_scores (Tensor): Outputs from the classification head, \
@@ -56,6 +56,14 @@ class NMSFreeCoder(BaseBBoxCoder):
         # bbox_index = indexs // self.num_classes # 第i个预测的box的索引
         bbox_index = torch.div(indexs, self.num_classes, rounding_mode='trunc') # 第i个预测的box的索引
         bbox_preds = bbox_preds[bbox_index] # torch.Size([300, 10])
+        if attnmap is not None:
+            # 8个头需要平均一下
+            attnmap = attnmap.mean(0)
+            wp_attn = attnmap[0][3:] # torch.Size([300, 10])
+            assert wp_attn.shape[-1] == 50
+            wp_attn = wp_attn[bbox_index]
+        else:
+            wp_attn = None
 
         final_box_preds = denormalize_bbox(bbox_preds, self.pc_range) # torch.Size([300, 9])
         # final_box_preds = bbox_preds
@@ -90,7 +98,8 @@ class NMSFreeCoder(BaseBBoxCoder):
             predictions_dict = {
                 'bboxes': boxes3d,
                 'scores': scores,
-                'labels': labels
+                'labels': labels,
+                'wp_attn': wp_attn
             }
             # 所以可能少于300个
 
@@ -114,10 +123,14 @@ class NMSFreeCoder(BaseBBoxCoder):
         """
         all_cls_scores = preds_dicts['all_cls_scores'][-1] # torch.Size([bs=1, 900, 2])
         all_bbox_preds = preds_dicts['all_bbox_preds'][-1]
-        # 均拿出最后一层的结果
+        if 'attnmap' in preds_dicts:
+            attnmap = preds_dicts['attnmap'][-1]
+            # 均拿出最后一层的结果
+        else:
+            attnmap = [None for i in range(len(all_bbox_preds))]
         
         batch_size = all_cls_scores.size()[0]
         predictions_list = []
         for i in range(batch_size):
-            predictions_list.append(self.decode_single(all_cls_scores[i], all_bbox_preds[i], no_filter))
+            predictions_list.append(self.decode_single(all_cls_scores[i], all_bbox_preds[i], attnmap[i], no_filter))
         return predictions_list

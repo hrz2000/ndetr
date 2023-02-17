@@ -511,6 +511,7 @@ class Detr3DHead(DETRHead):
             'iscollide': iscollide,
             'tp': tp_batch,
             'inter_attnmap': inter_attnmap,
+            'attnmap': inter_attnmap,
         }
         return outs, hs
 
@@ -811,7 +812,7 @@ class Detr3DHead(DETRHead):
                 
                 input_idx = attn_info['input_idx'] # 21#
                 output_idx = attn_info['output_idx'] # 理论上inp和oup的idx是完全一样的
-                assert len(input_idx) == len(output_idx) # 在验证的时候还不行
+                assert len(input_idx) == len(output_idx)
                 output_disappear = attn_info['output_disappear']
                 
                 len_box_route = len(input_idx)
@@ -1009,23 +1010,26 @@ class Detr3DHead(DETRHead):
             bboxes = img_metas[i]['box_type_3d'](bboxes, 9)
             scores = preds['scores'] # torch.Size([300])
             labels = preds['labels'] # torch.Size([300])
-            ret_list.append([bboxes, scores, labels])
+            wp_attn = preds['wp_attn'] # torch.Size([300])
+            ret_list.append([bboxes, scores, labels, wp_attn])
         
         if for_aux_outs:
             return [dict(
                 boxes_3d=bboxes,
                 scores_3d=scores,
                 labels_3d=labels,
+                wp_attn=wp_attn,
                 # attrs_3d=outs['all_wp_preds'][-1][i] # 每个bs的最后一层
-            ) for i, (bboxes, scores, labels) in enumerate(ret_list)]
+            ) for i, (bboxes, scores, labels, wp_attn) in enumerate(ret_list)]
         
         bbox_results = []
-        for i, (bboxes, scores, labels) in enumerate(ret_list):
+        for i, (bboxes, scores, labels, wp_attn) in enumerate(ret_list):
             attrs = None
             refine_wp = None
             route_wp = None
             iscollide = None
             fut_boxes = None
+            attnmap = None
             if outs['all_wp_preds'] is not None:
                 attrs=outs['all_wp_preds'][-1][i].cpu() # 最后一层的第i个batch
             if outs['refine_wp'] is not None:
@@ -1036,6 +1040,9 @@ class Detr3DHead(DETRHead):
                 iscollide=outs['iscollide'][i].cpu() # bool
             if outs['fut_boxes'] is not None:
                 fut_boxes=outs['fut_boxes'][i].cpu()
+            if outs['attnmap'] is not None:
+                attnmap=outs['attnmap'][-1][i].cpu()
+                attnmap=torch.cat([t for t in attnmap], axis=1)
             pts_bbox = dict(
                 boxes_3d=bboxes.to('cpu'),
                 scores_3d=scores.cpu(),
@@ -1045,6 +1052,8 @@ class Detr3DHead(DETRHead):
                 route_wp=route_wp,
                 iscollide=iscollide, 
                 fut_boxes=fut_boxes,
+                attnmap=attnmap,
+                wp_attn=wp_attn,
                 img_metas=img_metas[i] # 这个bs的img_metas
             )
             bbox_results.append(pts_bbox)

@@ -142,8 +142,12 @@ class HungarianAssigner3D(BaseAssigner):
         assigned_gt_inds[:] = 0
         # assign foregrounds based on matching results
         assigned_gt_inds[matched_row_inds] = matched_col_inds + 1
+        assert len(gt_labels) == len(gt_idxs)
         assigned_labels[matched_row_inds] = gt_labels[matched_col_inds]
         new_gt_idxs[matched_row_inds] = gt_idxs[matched_col_inds] # 把对应位置赋值成排序后的gt的idx
+        # TODO: 这里对gt_idx的使用是错误的
+        import pdb;pdb.set_trace()
+        
         # new_gt_idxs[matched_row_inds] = gt_idxs[matched_col_inds.cpu().detach().numpy()] # 把对应位置赋值成排序后的gt的idx
         return AssignResult(
             num_gts, assigned_gt_inds, None, labels=assigned_labels), new_gt_idxs

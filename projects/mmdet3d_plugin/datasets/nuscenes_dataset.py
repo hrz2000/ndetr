@@ -8,6 +8,7 @@ import numpy as np
 import pyquaternion
 from nuscenes.utils.data_classes import Box as NuScenesBox
 import torch
+import matplotlib.pyplot as plt
 
 from mmdet3d.core import show_result
 from mmdet3d.core.bbox import Box3DMode, Coord3DMode, LiDARInstance3DBoxes
@@ -190,7 +191,8 @@ class CustomNuScenesDataset(Custom3DDataset):
             # import pdb;pdb.set_trace()
             data_infos = data_infos[1181:1190]
         if self.in_test:
-            data_infos = data_infos[:200]
+            # data_infos = data_infos[:5]
+            data_infos = data_infos[1181:1190]
         return data_infos
 
     def get_data_info(self, index):
@@ -223,7 +225,7 @@ class CustomNuScenesDataset(Custom3DDataset):
             
         ann_info = None
         if not self.test_mode:
-            ann_info = self.get_ann_info(index, cam2imgs)
+            ann_info = self.get_ann_info(index, cam2imgs) # 这里面进行了过滤
 
         plan=info['plan']
         fv_path = image_paths[0]
@@ -252,16 +254,18 @@ class CustomNuScenesDataset(Custom3DDataset):
             ann_info=ann_info,
             plan=plan,
             topdown_path=topdown_path,
-            topdown=info['topdown'],
+            topdown=topdown,
             hdmap=hdmap,
             attn_info=attn_info,
-            gt_idxs=info['gt_idxs'],
+            gt_idxs=ann_info['gt_idxs'], # 这里的gt_idxs是和gt_box3d对应不上的
+            # 所以这个gt_idxs我用了吗？换乘ann_info的才靠谱
             index=index,
         )
         
         return input_dict
 
     def get_ann_info(self, index, cam2imgs):
+        # get_data_info里面没有对gt_idxs等进行过滤处理
 
         info = self.data_infos[index]
         
@@ -271,6 +275,7 @@ class CustomNuScenesDataset(Custom3DDataset):
             mask = info['num_lidar_pts'] > 0
         gt_bboxes_3d = info['gt_boxes'][mask] # (66, 9)
         gt_names_3d = info['gt_names'][mask] #类别名字
+        gt_idxs = info['gt_idxs'][mask] #类别名字
         gt_labels_3d = []
         for cat in gt_names_3d:
             if cat in self.CLASSES:
@@ -284,25 +289,27 @@ class CustomNuScenesDataset(Custom3DDataset):
         ego_box_3d = gt_bboxes_3d[0]
 
         cam2img = cam2imgs[0]
-        valid_mask = filter_invisible(gt_bboxes_3d, self.img_shape, cam2img)
+        valid_mask = filter_invisible(gt_bboxes_3d, self.img_shape, cam2img) # 对gt也进行了这样的处理，至少没有了ego
         gt_bboxes_3d = gt_bboxes_3d[valid_mask]
         gt_labels_3d = gt_labels_3d[valid_mask]
         gt_names_3d = gt_names_3d[valid_mask]
+        gt_idxs = gt_idxs[valid_mask]
     
         anns_results = dict(
             gt_bboxes_3d=gt_bboxes_3d,
             gt_labels_3d=gt_labels_3d,
             gt_names=gt_names_3d,
+            gt_idxs=gt_idxs,
             ego_box_3d=ego_box_3d
         )
         return anns_results
 
-    def get_gt_pts_bbox(self, index):
+    def get_gt_pts_bbox(self, index): # 为了便于可视化的gt信息
         data_info = self.get_data_info(index)
         anns_results = data_info['ann_info']
         gt_bboxes_3d = anns_results['gt_bboxes_3d']
         ego_box_3d = anns_results['ego_box_3d']
-        gt_labels_3d = anns_results['gt_labels_3d']
+        gt_labels_3d = anns_results['gt_labels_3d'] # 这里是没有过滤的
         gt_names = anns_results['gt_names']
         
         cam2img = data_info['cam2imgs'][0]
@@ -323,6 +330,7 @@ class CustomNuScenesDataset(Custom3DDataset):
             imgpath=imgpath,
             # gt_bev=data_info['topdown_path']
             # gt_bev=data_info['topdown_path']
+            wp_attn=None,
             topdown=None,#可视化的时候要用
             hdmap=None
         )
@@ -783,7 +791,8 @@ def show_results(index, pred_pts_bbox, gt_pts_bbox, out_dir, img=None):
                                         width=2, # 画wp线段的时候宽度是2米，在里面会乘以像素大小
                                         forshow=True,
                                      ))
-    fut_box_img = create_fut_bev(pred_pts_bbox, gt_pts_bbox)
+    # fut_box_img = create_fut_bev(pred_pts_bbox, gt_pts_bbox)
+    fut_box_img = None
     
     args = []
     if collide_img is not None:
@@ -800,6 +809,25 @@ def show_results(index, pred_pts_bbox, gt_pts_bbox, out_dir, img=None):
     # all_img = np.full(shape=(h+s,max(w,s),3),fill_value=255) # 白色背景
     all_img[:h,:w] = front_img
     all_img[h:h+bh,(w-bw)//2:(w-bw)//2+bw] = bev_img
+    
+    front_img = all_img
+    bev_img = pred_pts_bbox['attnmap'] # 没问题
+    bev_img = bev_img[...,None]*255
+    # a,b,c = n_bev_img.shape
+    # bev_img = np.array(a*3,b*3,c)
+    plt.figure(figsize=(8,1))
+    plt.imshow(bev_img)
+    plt.axis('off')
+    plt.savefig('./a.png', bbox_inches='tight')
+    bev_img=mmcv.imread('./a.png')
+    
+    h, w, _ = front_img.shape
+    bh, bw, _ = bev_img.shape
+    all_img = np.zeros((h+bh,max(w,bw),3)) # 黑色背景
+    # all_img = np.full(shape=(h+s,max(w,s),3),fill_value=255) # 白色背景
+    all_img[:h,:w] = front_img
+    all_img[h:h+bh,(w-bw)//2:(w-bw)//2+bw] = bev_img
+    
     mmcv.imwrite(all_img, f'{out_dir}/{index:05d}.png')
 
 def output_to_nusc_box(detection, with_velocity=True):

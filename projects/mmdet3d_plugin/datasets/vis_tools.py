@@ -265,7 +265,9 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
     origin = (size[0]//2, size[1]//2)
 
     gt_bbox = gt_pts_bbox.get('boxes_3d', None)
+    gt_wp_attn = gt_pts_bbox.get('gt_wp_attn', None)
     pred_bbox = pred_pts_bbox.get('boxes_3d', None)
+    wp_attn = pred_pts_bbox.get('wp_attn', None)
     for box_type_idx, (bbox, c) in enumerate([(gt_bbox,"chartreuse"), (pred_bbox,"dodgerblue")]):
         if bbox is None:
             continue
@@ -299,6 +301,11 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
                 endx1, endy1, endx2, endy2 = get_coords(x, y, yaw, vel)
                 fill_c = 'orange' if box_type_idx==0 else 'royalblue'
                 draw.line((endx1, endy1, endx2, endy2), fill=fill_c, width=1)
+                
+                if box_type_idx==1: # 预测
+                    if wp_attn is None:
+                        continue
+                    draw.text((endx1, endy1), f"({wp_attn[idx]:.2f})",fill='red')
     
     gt_wp = copy.deepcopy(gt_pts_bbox.get('attrs_3d', None))
     pred_wp = copy.deepcopy(pred_pts_bbox.get('attrs_3d', None))
