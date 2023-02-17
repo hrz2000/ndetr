@@ -798,82 +798,41 @@ class Detr3DHead(DETRHead):
         if self.loss_weights.loss_attnmap != 0:
             # inter_attnmap = outs['inter_attnmap'] # torch.Size([32, 6, 8, 53, 53])
             for batch_id in range(len(inter_attnmap)):
-                last_layer_batchi_gt = new_gt_idxs_list_layers[-1][batch_id].to(torch.int) # 每个gt对应着那些位置也是需要明确的
-                attnmap = inter_attnmap[batch_id] # torch.Size([6, 8, 53, 53])
-                attnmap = attnmap[-1:] # 最后一层的
-                
                 if 'attn_info' not in img_metas[batch_id]: # 仿真
                     break
                 
-                attn_info = img_metas[batch_id]['attn_info']
-                gt_attnmap = attnmap.new_tensor(attn_info['attn_map']) # torch.Size([8, 8, 33, 33])
-                gt_attnmap = gt_attnmap[-1:] # 最后一层的
+                last_layer_batchi_gt = new_gt_idxs_list_layers[-1][batch_id].to(torch.int) # 每个gt对应着那些位置也是需要明确的
+                gt_idxs = gt_idxs_list[batch_id]
+                attnmap = inter_attnmap[batch_id] # torch.Size([6, 8, 53, 53])
+                # attnmap = attnmap[-1:] # 最后一层的
                 
-                len_predmap = attnmap.shape[-1]
-                len_gtmap = gt_attnmap.shape[-1]
+                gt_attnmap = attnmap.new_tensor(img_metas[batch_id]['attnmap'])
+                assert gt_attnmap.shape[-1] == 1 + len(gt_idxs) + 1
                 
-                input_idx = attn_info['input_idx'] # 21#
-                output_idx = attn_info['output_idx'] # 理论上inp和oup的idx是完全一样的
-                assert len(input_idx) == len(output_idx)
-                output_disappear = attn_info['output_disappear']
-                
-                len_box_route = len(input_idx)
-                len_attn = 1 + len(input_idx) + 1
-                # assert len_attn == len_gtmap # 咋input_idx比input_idx多呢，。。。。
-                # 上面这个assert一定不对，因为有pad
-                len_box = len(output_disappear)
-                input_idx = input_idx[:1+len_box] # bugfix:第一个route给忘了，也就是不包含route往后的东西
-                len_route = len_box_route - len_box
-                
-                gt_supervise = [0,len_box+1] # cls_emb & route # TODO: 后面是考虑多个route了
-                pred_supervise = [self.wp_query_pos,self.route_query_pos] # cls_emb & route
-                
-                # 考虑第2个route:
-                if len_route==1:
-                    pass
-                elif len_route==2:
-                    pass
-                    # gt_supervise.append(len_box+2)
-                    # pred_supervise.append(self.route_query_pos2) # 保证放在第一个route后面
-                    # # 没有check这个route_query2上是否蕴含了第二个route的信息
-                else:
-                    assert False
-                    
-                for i, obj_idx in enumerate(input_idx):
-                    # 这个for循环，似乎无法写成一句话
-                    # idx = torch.where(last_layer_batchi_gt==obj_idx)[0] # tuple里面只有一个元素
-                    idx = torch.nonzero(last_layer_batchi_gt==obj_idx) # 是50个里面选，进行索引
-                    # torch.Size([50]) int -> (x, 1)
-                    if len(idx) == 1:
-                        gt_i = i+1
-                        pred_i = idx.item()+self.extra_query # TODO：如果route数量不固定，需要动态的
-                        # assert gt_i >= 0 and gt_i < len_gtmap # 这个包含了pad所以比较宽泛
-                        try:
-                            assert gt_i >= 0 and gt_i < 1+len_box # 也就是route前面的东西 
-                            assert pred_i >=0 and pred_i < len_predmap
-                        except:
-                            import pdb;pdb.set_trace()
-                        gt_supervise.append(gt_i)
-                        pred_supervise.append(pred_i)
+                sorted_idxs = []
+                for idx in gt_idxs:
+                    pred_idx = torch.where(last_layer_batchi_gt==idx)[0]
+                    if pred_idx.shape[0] == 0:
+                        assert False
                     else:
-                        assert len(idx) == 0
-                
-                gt_supervise = gt_attnmap.new_tensor(np.array(gt_supervise)).to(torch.long)
-                gt_attnmap_filter = gt_attnmap[:,:,gt_supervise][:,:,:,gt_supervise] # TODO
+                        pred_idx = pred_idx.item()
+                        sorted_idxs.append(pred_idx+3) # 前面有wp_emb, TODO: 这里需要假定extra_query为3
+                sorted_idxs = [self.wp_query_pos, *sorted_idxs, self.route_query_pos]
+                new_map = attnmap[:,:,sorted_idxs][:,:,:,sorted_idxs] # torch.Size([6, 8, 12, 12])
+                gt_pl_lack = img_metas[batch_id]['gt_pl_lack']
+                gt_pl_have = np.array(gt_pl_lack) == False
+                gt_attnmap_filter = gt_attnmap[-1:,:,gt_pl_have][:,:,:,gt_pl_have]
+                pred_attnmap_filter = new_map[-1:,:,gt_pl_have][:,:,:,gt_pl_have]
+
                 gt_attnmap_filter_sum1 = gt_attnmap_filter.sum(-1)
                 gt_attnmap_filter_sum1 += 0.00001
                 gt_attnmap_filter = (gt_attnmap_filter / gt_attnmap_filter_sum1[...,None]) # .clamp(0.00001,1)
                 
-                pred_supervise = gt_attnmap.new_tensor(np.array(pred_supervise)).to(torch.long)
-                pred_attnmap_filter = attnmap[:,:,pred_supervise][:,:,:,pred_supervise]
                 pred_attnmap_filter_sum1 = pred_attnmap_filter.sum(-1) # 感觉是因为这个值太小导致的
                 pred_attnmap_filter_sum1 += 0.00001
                 pred_attnmap_filter = (pred_attnmap_filter / pred_attnmap_filter_sum1[...,None]) # 这样又不是
                 
                 isnotnan = torch.logical_and(torch.isfinite(pred_attnmap_filter), torch.isfinite(gt_attnmap_filter)) # 应该不会有作用，因为我使用了clamp, torch.Size([1, 8, 15, 15])
-                
-                # if torch.any(isnotnan==False):
-                #     import pdb;pdb.set_trace()
                 
                 loss_attnmap = F.l1_loss(gt_attnmap_filter[isnotnan], pred_attnmap_filter[isnotnan]) # layer层面
                 if torch.isnan(loss_attnmap): ## 遇到了nan，发现是因为isnotnan全是false，学成了这样

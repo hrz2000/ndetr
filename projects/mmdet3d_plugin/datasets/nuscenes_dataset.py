@@ -192,7 +192,7 @@ class CustomNuScenesDataset(Custom3DDataset):
             data_infos = data_infos[1181:1190]
         if self.in_test:
             # data_infos = data_infos[:5]
-            data_infos = data_infos[1181:1190]
+            data_infos = data_infos[1181:1210]
         return data_infos
 
     def get_data_info(self, index):
@@ -257,8 +257,9 @@ class CustomNuScenesDataset(Custom3DDataset):
             topdown=topdown,
             hdmap=hdmap,
             attn_info=attn_info,
-            gt_idxs=ann_info['gt_idxs'], # 这里的gt_idxs是和gt_box3d对应不上的
-            # 所以这个gt_idxs我用了吗？换乘ann_info的才靠谱
+            gt_idxs=ann_info['gt_idxs'],
+            attnmap=ann_info['attnmap'],
+            gt_pl_lack=ann_info['gt_pl_lack'],
             index=index,
         )
         
@@ -316,34 +317,50 @@ class CustomNuScenesDataset(Custom3DDataset):
         # boxes_id = boxes_id[valid_mask]
         
         # 这个时候找gt_idxs和plant_gt_idxs的共同之处
-        pl_new_idxs = []
+        pl_box_idxs_raw = []
         for idx in gt_idxs:
             # import pdb;pdb.set_trace()
-            idx_pl = np.where(plant_gt_idxs==idx)[0]
+            idx_pl = np.where(plant_gt_idxs==idx)[0] # 获得了5
             if idx_pl.shape[0] == 0:
-                pl_new_idxs.append(-1)
+                pl_box_idxs_raw.append(-1)
             else:
                 idx_pl = idx_pl.item()
-                pl_new_idxs.append(idx_pl+1) # 前面有wp_emb
+                pl_box_idxs_raw.append(idx_pl) # 前面有wp_emb
+                # pl_box_idxs_raw.append(idx_pl+1) # 前面有wp_emb
         
         # import pdb;pdb.set_trace()
         # pl_exists_idxs = np.array(pl_new_idxs)[pl_new_idxs!=-1][0] # pl有我没有的先不管
-        pl_exists_idxs = np.array(pl_new_idxs)
+        pl_box_idxs = np.array(pl_box_idxs_raw)
+        
+        gt_pl_lack = pl_box_idxs==-1
+        
+        # import pdb;pdb.set_trace()
+        # gt_idxs: [1501, 1510, 1549, 1600, 1603, 1674, 1706, 1716, 1732, 1736]
+        #           [1,     3,   6,    9, 10, 16, 18, 19, 20, 21]
+        
+        # attnmap: array([0.00086509, 0.00366808, 0.02288333, 0.03979345, 0.04145063, 0.24237308, 0.04866292, 0.01946599, 0.03253264, 0.02445563,
         
         if len_box_route==1:
-            pl_map_idxs = [0, *(pl_exists_idxs.tolist()), len_box_route]
+            pl_map_idxs = [0, *(pl_box_idxs.tolist()), len_box_route]
+            gt_pl_lack = [False, *gt_pl_lack, False]
         else:
-            pl_map_idxs = [0, *(pl_exists_idxs.tolist()), len_box_route-1, len_box_route]
+            pl_map_idxs = [0, *(pl_box_idxs.tolist()), len_box_route-1] # len_box_route, 目前只用第一个route
+            gt_pl_lack = [False, *gt_pl_lack, False]
         
         attnmap = attnmap[:,:,pl_map_idxs][:,:,:,pl_map_idxs] # (8, 8, 13, 13)
         # 现在attnmap是1+box+route+1
         # gt_idxs于此无关，我们希望是一样的
         # 如果想修改成和gt一样的格式，需要把-1的位置给填充成别的东西
-        import pdb;pdb.set_trace()
-        no_my_gt = np.array(pl_new_idxs)[pl_new_idxs==-1]
-        attnmap[:,:,no_my_gt][:,:,:,no_my_gt] = -1 # 完全按照gt_idx顺序，前面多一个cls_emb，后面多route
+        # import pdb;pdb.set_trace()
+        # 第二个维度是gt_idxs，后者是yes or no，其实后者就行
+        attnmap[:,:,gt_pl_lack][:,:,:,gt_pl_lack] = -1 # 完全按照gt_idx顺序，前面多一个cls_emb，后面多route
         
-        wp_attn = attnmap[-1,1,0,:] # wp对所有（wp、box、route）
+        # assert attnmap.shape[-1] == 1 + len(gt_idxs) + len_route
+        assert attnmap.shape[-1] == 1 + len(gt_idxs) + 1
+        
+        # import pdb;pdb.set_trace()
+        # wp_attn = attnmap[-1,1,0,:] # wp对所有（wp、box、route）
+        wp_attn = attnmap[-1,:,0,:].mean(0) # wp对所有（wp、box、route）
         # 我们需要把wp_attn补全到和gt_idxs一样的格式
         # 对gt可视化的时候，前面concat上了ego
         # 第一个box其实是在idx=2的位置开始
@@ -355,6 +372,7 @@ class CustomNuScenesDataset(Custom3DDataset):
             gt_idxs=gt_idxs,
             wp_attn=wp_attn,
             attnmap=attnmap,
+            gt_pl_lack=gt_pl_lack,
             ego_box_3d=ego_box_3d
         )
         return anns_results
@@ -878,6 +896,7 @@ def show_results(index, pred_pts_bbox, gt_pts_bbox, out_dir, img=None):
     plt.imshow(bev_img)
     plt.axis('off')
     plt.savefig('./a.png', bbox_inches='tight')
+    plt.close()
     bev_img=mmcv.imread('./a.png')
     
     h, w, _ = front_img.shape
