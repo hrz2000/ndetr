@@ -960,6 +960,17 @@ class Detr3DHead(DETRHead):
 
     @force_fp32(apply_to=('preds_dicts'))
     def get_bboxes(self, outs, img_metas, rescale=False, no_filter=False, for_aux_outs=False):
+        # from datetime import timedelta
+        # import wandb
+        # from wandb import AlertLevel
+
+        # wandb.alert(
+        #     title='Low accuracy',
+        #     text=f'xxxtest',
+        #     level=AlertLevel.WARN,
+        #     wait_duration=timedelta(minutes=5)
+        # )
+        
         preds_dicts = self.bbox_coder.decode(outs, no_filter=no_filter)
         # [dict_keys(['bboxes', 'scores', 'labels']),...]
         num_samples = len(preds_dicts)

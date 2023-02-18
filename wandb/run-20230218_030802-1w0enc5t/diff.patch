@@ -1,0 +1,42 @@
+diff --git a/projects/configs/detr3d/new/common.py b/projects/configs/detr3d/new/common.py
+index 405f344..9a6f4f5 100644
+--- a/projects/configs/detr3d/new/common.py
++++ b/projects/configs/detr3d/new/common.py
+@@ -20,7 +20,14 @@ log_config = dict(
+     interval=1,
+     hooks=[
+         dict(type='TextLoggerHook'),
+-        dict(type='TensorboardLoggerHook')
++        dict(type='TensorboardLoggerHook'),
++        dict(
++            type='WandbLoggerHook', 
++            init_kwargs=dict(
++                project='your-awesome-project',
++                name='name2')
++                # resume='auto'
++            )
+     ])
+ # yapf:enable
+ dist_params = dict(backend='nccl')
+diff --git a/projects/mmdet3d_plugin/models/dense_heads/detr3d_head.py b/projects/mmdet3d_plugin/models/dense_heads/detr3d_head.py
+index 89234d9..f7150f9 100755
+--- a/projects/mmdet3d_plugin/models/dense_heads/detr3d_head.py
++++ b/projects/mmdet3d_plugin/models/dense_heads/detr3d_head.py
+@@ -960,6 +960,17 @@ class Detr3DHead(DETRHead):
+ 
+     @force_fp32(apply_to=('preds_dicts'))
+     def get_bboxes(self, outs, img_metas, rescale=False, no_filter=False, for_aux_outs=False):
++        # from datetime import timedelta
++        # import wandb
++        # from wandb import AlertLevel
++
++        # wandb.alert(
++        #     title='Low accuracy',
++        #     text=f'xxxtest',
++        #     level=AlertLevel.WARN,
++        #     wait_duration=timedelta(minutes=5)
++        # )
++        
+         preds_dicts = self.bbox_coder.decode(outs, no_filter=no_filter)
+         # [dict_keys(['bboxes', 'scores', 'labels']),...]
+         num_samples = len(preds_dicts)

@@ -1,0 +1,18 @@
+diff --git a/projects/configs/detr3d/new/common.py b/projects/configs/detr3d/new/common.py
+index 405f344..a3c8080 100644
+--- a/projects/configs/detr3d/new/common.py
++++ b/projects/configs/detr3d/new/common.py
+@@ -20,7 +20,12 @@ log_config = dict(
+     interval=1,
+     hooks=[
+         dict(type='TextLoggerHook'),
+-        dict(type='TensorboardLoggerHook')
++        dict(type='TensorboardLoggerHook'),
++        dict(
++            type='WandbLoggerHook', 
++            init_kwargs=dict(
++                project='your-awesome-project',
++                resume='auto'))
+     ])
+ # yapf:enable
+ dist_params = dict(backend='nccl')

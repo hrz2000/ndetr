@@ -20,7 +20,14 @@ log_config = dict(
     interval=1,
     hooks=[
         dict(type='TextLoggerHook'),
-        dict(type='TensorboardLoggerHook')
+        dict(type='TensorboardLoggerHook'),
+        dict(
+            type='WandbLoggerHook', 
+            init_kwargs=dict(
+                project='your-awesome-project',
+                resume=False)
+                # resume='auto'
+            )
     ])
 # yapf:enable
 dist_params = dict(backend='nccl')
