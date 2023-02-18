@@ -360,7 +360,7 @@ class CustomNuScenesDataset(Custom3DDataset):
         assert attnmap.shape[-1] == 1 + len(gt_idxs) + 1
         
         # import pdb;pdb.set_trace()
-        wp_attn = attnmap[-1,1,0,:] # wp对所有（wp、box、route）
+        wp_attn = attnmap[-1,1,0,:] # wp对所有（wp、box、route）第一个head
         # wp_attn = attnmap[-1,:,0,:].mean(0) # wp对所有（wp、box、route）
         # 我们需要把wp_attn补全到和gt_idxs一样的格式
         # 对gt可视化的时候，前面concat上了ego
@@ -853,7 +853,7 @@ def make_mat(data_info, mat, is_carla):
     cam2ego[:3,-1] = data_info[f'{mat}_translation']
     return cam2ego
 
-def show_results(index, pred_pts_bbox, gt_pts_bbox, out_dir, img=None):
+def show_results(index, pred_pts_bbox, gt_pts_bbox, out_dir, img=None, in_simu=False):
     mmcv.mkdir_or_exist(out_dir)
     
     cam2img = gt_pts_bbox['cam2img']
@@ -888,24 +888,25 @@ def show_results(index, pred_pts_bbox, gt_pts_bbox, out_dir, img=None):
     all_img[:h,:w] = front_img
     all_img[h:h+bh,(w-bw)//2:(w-bw)//2+bw] = bev_img
     
-    front_img = all_img
-    bev_img = pred_pts_bbox['attnmap'] # 没问题
-    bev_img = bev_img[...,None]*255
-    # a,b,c = n_bev_img.shape
-    # bev_img = np.array(a*3,b*3,c)
-    plt.figure(figsize=(8,1))
-    plt.imshow(bev_img)
-    plt.axis('off')
-    plt.savefig('./a.png', bbox_inches='tight')
-    plt.close()
-    bev_img=mmcv.imread('./a.png')
-    
-    h, w, _ = front_img.shape
-    bh, bw, _ = bev_img.shape
-    all_img = np.zeros((h+bh,max(w,bw),3)) # 黑色背景
-    # all_img = np.full(shape=(h+s,max(w,s),3),fill_value=255) # 白色背景
-    all_img[:h,:w] = front_img
-    all_img[h:h+bh,(w-bw)//2:(w-bw)//2+bw] = bev_img
+    if not in_simu:
+        front_img = all_img
+        bev_img = pred_pts_bbox['attnmap'] # 没问题
+        bev_img = bev_img[...,None]*255
+        # a,b,c = n_bev_img.shape
+        # bev_img = np.array(a*3,b*3,c)
+        plt.figure(figsize=(8,1))
+        plt.imshow(bev_img)
+        plt.axis('off')
+        plt.savefig('./a.png', bbox_inches='tight')
+        plt.close()
+        bev_img=mmcv.imread('./a.png')
+        
+        h, w, _ = front_img.shape
+        bh, bw, _ = bev_img.shape
+        all_img = np.zeros((h+bh,max(w,bw),3)) # 黑色背景
+        # all_img = np.full(shape=(h+s,max(w,s),3),fill_value=255) # 白色背景
+        all_img[:h,:w] = front_img
+        all_img[h:h+bh,(w-bw)//2:(w-bw)//2+bw] = bev_img
     
     mmcv.imwrite(all_img, f'{out_dir}/{index:05d}.png')
 

@@ -1,7 +1,7 @@
 import mmcv
 import time
 
-num = 4
+num = 8
 evalx = [[] for t in range(num)]
 
 experiments='debug'
@@ -12,9 +12,9 @@ resume=1
 timeout=600
 unblock=False
 repetitions=1
-save_path='output/output/detr_eval_split' + "/" + time.strftime('%Y-%m-%d_%H:%M:%S')
+save_path='output/output/detr_eval_split' + "/bs_box_attnmap/" + time.strftime('%Y-%m-%d_%H:%M:%S')
 config="projects/configs/detr3d/new/bs_box_attnmap.py"
-checkpoint='work_dirs/bs_box_attnmap/2023-02-16_12:36:22/epoch_18.pth'
+checkpoint='work_dirs/bs_box_attnmap/save_2023-02-17_21:46:13/epoch_18.pth'
 track='MAP'
 
 for idx in range(36):
@@ -23,17 +23,18 @@ for idx in range(36):
     #     continue
     todolist = list(range(36))
     sub_idx = todolist.index(idx)
-    res = sub_idx % 4
+    cuda = sub_idx % 4
+    res = sub_idx % num
     port = f"{res}0"
 
     route_rel=f'leaderboard/data/longest6/longest6_split/longest_weathers_{idx}.xml'
     scenarios_rel='leaderboard/data/longest6/eval_scenarios.json'
     
-    base=f'CUDA_VISIBLE_DEVICES={res} python leaderboard/scripts/run_evaluation.py experiments={experiments} eval.route_rel={route_rel} eval.scenarios_rel={scenarios_rel}'
+    base=f'CUDA_VISIBLE_DEVICES={cuda} python leaderboard/scripts/run_evaluation.py experiments={experiments} eval.route_rel={route_rel} eval.scenarios_rel={scenarios_rel}'
     # data_save_path_rel是save_path下面数据保存的地方，避免保存到同一个地方
     
     exp = f"experiments.DATAGEN={datagen} experiments.unblock={unblock}" # plant需要在exp里面设置model_path
-    port_para = f"trafficManagerPort=81{port} port=20{port}"
+    port_para = f"trafficManagerPort=82{port} port=20{port}"
     save_para = f"save_path={save_path}  experiments.data_save_path_rel=Route_{idx} checkpoint_rel={idx}.json +SAVE_SENSORS=1"
     mm_para = f"+mmdet_cfg={config} +weight={checkpoint}" # plant的时候也可以传入
     run_para = f"timeout={timeout} resume={resume} repetitions={repetitions} track={track}"

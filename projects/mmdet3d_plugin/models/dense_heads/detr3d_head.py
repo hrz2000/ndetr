@@ -972,7 +972,6 @@ class Detr3DHead(DETRHead):
             scores = preds['scores'] # torch.Size([300])
             labels = preds['labels'] # torch.Size([300])
             wp_attn = preds['wp_attn'] # torch.Size([300])
-            wp_attn = preds['wp_attn'] # torch.Size([300])
             matched_idxs = preds['matched_idxs']
             ret_list.append([bboxes, scores, labels, wp_attn, matched_idxs])
         

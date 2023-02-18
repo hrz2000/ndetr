@@ -1213,5 +1213,5 @@ def time_and_vis(self, inp_dict, gt_pts_bbox, pred_pts_bbox={}):
     out_dir = str(self.save_path / 'vis')
     img = inp_dict['img'][0][0].detach().cpu().numpy().transpose(1,2,0)
     
-    show_results(frame, pred_pts_bbox, gt_pts_bbox, out_dir, img=img) # 进行画图和保存
+    show_results(frame, pred_pts_bbox, gt_pts_bbox, out_dir, img=img, in_simu=True) # 进行画图和保存
 
