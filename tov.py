@@ -40,8 +40,8 @@ def image_to_video(image_path, media_path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--re', '-r', default="output/output/bs_box_2023-02-16_11:15:25/data_save_path/longest6_route0_02_16_11_15_42_2023-02-16_11:15:53/vis/*", type=str)
-    parser.add_argument('--save', '-s', default='bs_box.mp4', type=str)
+    parser.add_argument('--re', '-r', default="output/output/detr_eval_split/2023-02-17_10:55:27/Route_8/longest_weathers_8_route0_02_17_11_16_45_2023-02-17_11:17:02/vis/*", type=str)
+    parser.add_argument('--save', '-s', default='8灯.mp4', type=str)
     arg = parser.parse_args()
     image_to_video(arg.re, arg.save)
     print("ok")

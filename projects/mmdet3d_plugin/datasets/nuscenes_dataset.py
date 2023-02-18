@@ -192,7 +192,7 @@ class CustomNuScenesDataset(Custom3DDataset):
             data_infos = data_infos[1181:1190]
         if self.in_test:
             # data_infos = data_infos[:5]
-            data_infos = data_infos[700:1210]
+            data_infos = data_infos[1181:1210]
         return data_infos
 
     def get_data_info(self, index):
