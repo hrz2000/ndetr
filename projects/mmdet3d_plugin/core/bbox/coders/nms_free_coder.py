@@ -58,7 +58,8 @@ class NMSFreeCoder(BaseBBoxCoder):
         bbox_preds = bbox_preds[bbox_index] # torch.Size([300, 10])
         if attnmap is not None:
             # 8个头需要平均一下
-            attnmap = attnmap.mean(0)
+            # attnmap = attnmap.mean(0)
+            attnmap = attnmap[1]
             wp_attn = attnmap[0][3:] # torch.Size([300, 10])
             assert wp_attn.shape[-1] == 50
             wp_attn = wp_attn[bbox_index]

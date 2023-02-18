@@ -306,9 +306,9 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
                 
                 if box_type_idx==1: # 预测
                     if wp_attn is not None:
-                        draw.text((endx1+30, endy1), f"{wp_attn[idx]:.2f}", fill='red')
+                        draw.text((endx1+30, endy1), f"{wp_attn[idx]:.2f}", fill='blue')
                     if matched_idxs is not None:
-                        draw.text((endx1+30+30, endy1), f"{int(matched_idxs[idx])}", fill='red')
+                        draw.text((endx1+30+30, endy1), f"{int(matched_idxs[idx])}", fill='blue')
                 else:
                     if gt_wp_attn is not None:
                         # gt_wp_attn比gt_idxs多一些，因为由对route的attn

@@ -277,8 +277,9 @@ class CustomNuScenesDataset(Custom3DDataset):
         assert len(input_idx) == len(output_idx)
         output_disappear = attn_info['output_disappear']
         
+        # TODO
+        
         len_box_route = len(input_idx)
-        len_attn = 1 + len_box_route + 1 # TODO:需要增加对第二个route的attn_loss
         len_box = len(output_disappear) # 21
         plant_gt_idxs = input_idx[:len_box] # bugfix：注意这里没有cls_emb
         len_route = len_box_route - len_box
@@ -359,8 +360,8 @@ class CustomNuScenesDataset(Custom3DDataset):
         assert attnmap.shape[-1] == 1 + len(gt_idxs) + 1
         
         # import pdb;pdb.set_trace()
-        # wp_attn = attnmap[-1,1,0,:] # wp对所有（wp、box、route）
-        wp_attn = attnmap[-1,:,0,:].mean(0) # wp对所有（wp、box、route）
+        wp_attn = attnmap[-1,1,0,:] # wp对所有（wp、box、route）
+        # wp_attn = attnmap[-1,:,0,:].mean(0) # wp对所有（wp、box、route）
         # 我们需要把wp_attn补全到和gt_idxs一样的格式
         # 对gt可视化的时候，前面concat上了ego
         # 第一个box其实是在idx=2的位置开始
@@ -408,7 +409,7 @@ class CustomNuScenesDataset(Custom3DDataset):
             imgpath=imgpath,
             # gt_bev=data_info['topdown_path']
             # gt_bev=data_info['topdown_path']
-            topdown=None,#可视化的时候要用
+            topdown=data_info['topdown'],#可视化的时候要用
             hdmap=None
         )
         return gt_pts_bbox
