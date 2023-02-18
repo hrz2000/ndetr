@@ -35,6 +35,7 @@ __pycache__/
 /script/*/*.txt
 /script/datagen_sub/_*
 /script/eval_sub/_*
+/wandb
 
 # C extensions
 *.so
