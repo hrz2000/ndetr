@@ -5,6 +5,7 @@ from tools.preprocess.carla_dataset import PlanTDataset as Dataset
 from tqdm import tqdm
 import numpy as np
 import pickle
+import mmcv
 from projects.configs.detr3d.new.common import class_names
 
 @hydra.main(config_path=f"./config", config_name="config", version_base=None)
@@ -57,12 +58,14 @@ def main(cfg):
     
     for k,dataset in [('val',val_set), ('train',train_set)]:
         if dataset_type=='all':
-            name = f'data/carla_{k}_hdmap_all.pkl'
+            name = f'data/carla_{k}_hdmap_all_filter.pkl'
         elif dataset_type=='2all':
-            name = f'data/carla_{k}_hdmap_2all.pkl'
+            name = f'data/carla_{k}_hdmap_2all_filter.pkl'
         else:
-            name = f'data/carla_{k}_hdmap.pkl'
+            name = f'data/carla_{k}_hdmap_filter.pkl'
         load_dataset(k, dataset, intri, cam2vl_r, cam2vl_t, name)
+
+filter_all = mmcv.list_from_file('filter_all.log')
 
 def load_dataset(k, dataset, intri, sensor2vl_r, sensor2vl_t, name):
     dataset[0]
@@ -83,6 +86,11 @@ def load_dataset(k, dataset, intri, sensor2vl_r, sensor2vl_t, name):
         classes = np.array([t.lower() for t in class_names])
         # array(['car', 'pedestrian'], dtype='<U10')
         gt_names = classes[gt_labels]
+        
+        fv = item['img_metas']['img_filename']
+        import pdb;pdb.set_trace()
+        if fv in filter_all:
+            continue
 
         item = dict(
             lidar_path = None,

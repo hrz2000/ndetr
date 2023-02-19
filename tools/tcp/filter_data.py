@@ -90,7 +90,8 @@ def func(folder, checkpoint):
 				with open(f'filter_all.log', 'a') as f:
 					f.write("\n".join(meas)+'\n')
 def get_meas_list(route_data_folder, idxs):
-    return [f"{route_data_folder}/vis/{idx:04d}.png" for idx in idxs]
+    # return [f"{route_data_folder}/vis/{idx:04d}.png" for idx in idxs]
+    return [f"{route_data_folder}/rgb/{idx:04d}.png" for idx in idxs]
 
 def get_idxs_should_rm(record, route_data_folder, last_meas):
 	red_light_events = record["infractions"]['red_light']

@@ -45,10 +45,14 @@ if __name__ == '__main__':
     # parser.add_argument('--re', '-r', default="output/output/detr_eval_split/bs_box_attnmap/2023-02-18_10:39:45/Route_25/longest_weathers_25_route0_02_18_18_41_02_2023-02-18_18:41:28/vis/*", type=str)
     # parser.add_argument('--save', '-s', default='route2.mp4', type=str)
     # arg = parser.parse_args()
+    mmcv.mkdir_or_exist('mp4/is')
+    mmcv.mkdir_or_exist('mp4/rc')
     for i in range(36):
         # if i not in [2,10,15,18,20,24,29,32,34]:
-        if i not in [16,25,27,28]:
-            continue
-        route = f'route{i}'
-        image_to_video(f'output/output/detr_eval_split/bs_box_attnmap/2023-02-18_10:39:45/Route_{i}/*/vis/*', f'mp4/is/{route}.mp4')
+        if i in [9,10,12,15,22]:
+            route = f'route{i}'
+            image_to_video(f'output/output/detr_eval_split/bs_box_attnmap/2023-02-18_10:39:45/Route_{i}/*/vis/*', f'mp4/rc/{route}.mp4')
+        if i in [16,20,25,27]:
+            route = f'route{i}'
+            image_to_video(f'output/output/detr_eval_split/bs_box_attnmap/2023-02-18_10:39:45/Route_{i}/*/vis/*', f'mp4/is/{route}.mp4')
     print("ok")
