@@ -1,17 +1,20 @@
 from glob import glob
 import mmcv
 import numpy as np
+import os.path as osp
 
-a = '/mnt/disk02/hrz/ndetr/output/output/detr_eval_split/bs_box_attnmap/2023-02-18_10:39:45'
-# b = 'output/output/detr_eval_split/2023-02-17_10:55:27'
+a = 'output/output/detr_eval_split/2023-02-17_10:55:27'
+b = 'output/output/detr_eval_split/还没跑完2023-02-16_19:20:36'
 fa = glob(f"{a}/*json")
-# fb = glob(f"{b}/*json")
+fb = glob(f"{b}/*json")
 print(len(fa))
-# print(len(fb))
+print(len(fb))
 files = []
 files.extend(fa)
-# files.extend(fb)
-# print(len(files))
+files.extend(fb)
+print(len(files))
+
+files.sort(key=lambda x:int(osp.splitext(osp.basename(x))[0])) # 升序
 
 composed=[]
 penalty=[]
@@ -25,6 +28,8 @@ for f in files:
     composed.append(scores['score_composed'])
     penalty.append(scores['score_penalty'])
     route.append(scores['score_route'])
+
+
 
 composed_arr = np.array(composed)
 penalty_arr = np.array(penalty)
