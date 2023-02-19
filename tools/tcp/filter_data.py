@@ -55,7 +55,7 @@ def func(folder, checkpoint):
   
 		# 可能有一个rourte跑多次的情况进行处理
 		if len(dirs) != 1:
-			import pdb;pdb.set_trace()
+			# import pdb;pdb.set_trace()
 			for i, d in enumerate(dirs):
 				if i!=len(dirs)-1:
 					# os.removedirs(d)
@@ -80,12 +80,15 @@ def func(folder, checkpoint):
 			idxs_dict = get_idxs_should_rm(record, route_data_folder, last_meas)
 			idxs = []
 			for k,v in idxs_dict.items():
-				# idxs.extend(v)
+				idxs.extend(v)
 				meas = get_meas_list(route_data_folder, v)
 				if len(meas) > 0:
 					with open(f'filter_{k}.log', 'a') as f:
 						f.write("\n".join(meas)+'\n')
-    
+			if len(idxs) > 0:
+				meas = get_meas_list(route_data_folder, idxs)
+				with open(f'filter_all.log', 'a') as f:
+					f.write("\n".join(meas)+'\n')
 def get_meas_list(route_data_folder, idxs):
     return [f"{route_data_folder}/vis/{idx:04d}.png" for idx in idxs]
 
@@ -112,6 +115,7 @@ def get_idxs_should_rm(record, route_data_folder, last_meas):
 
 	block_scenes = []
 	for e_str in vehicle_blockeds:
+		# import pdb;pdb.set_trace()
 		match = re.search(pattern, e_str)
 		x, y = float(match[1]), float(match[2])
 		block_scenes.append((x,y))
@@ -164,6 +168,7 @@ def get_idxs_should_rm(record, route_data_folder, last_meas):
 				if (posx >= x-0.3 and posx <= x+0.3 ) and (posy>=y-0.3 and posy <= y+0.3):
 					should_rm = True
 					should_rm_idxs['block'].append(idx)
+					# import pdb;pdb.set_trace()
 					break
 			if should_rm == True:
 				continue
@@ -175,8 +180,8 @@ def get_idxs_should_rm(record, route_data_folder, last_meas):
 	return should_rm_idxs
 
 if __name__ == '__main__':
-	folders = glob('output/plant_datagen2/PlanT_data_1/*')
-	for k in ['col','red','block','timeout']:
+	folders = glob('output/plant_datagen/PlanT_data_1/*')
+	for k in ['all','col','red','block','timeout']:
 		with open(f'filter_{k}.log', 'w') as f:
 			pass
 	# folders = glob('output/datagen_l6/*')

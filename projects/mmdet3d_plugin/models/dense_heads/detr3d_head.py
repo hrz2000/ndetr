@@ -264,8 +264,10 @@ class Detr3DHead(DETRHead):
                 use_gt_light = True,
                 enable_uncertainty_loss_weight = True,
                 loss_weights = None,
+                use_all_map = True,
                  **kwargs
                  ):
+        self.use_all_map = use_all_map
         self.use_gt_light = use_gt_light
         self.wp_refine = wp_refine
         self.wp_refine_input_last = wp_refine_input_last
@@ -824,8 +826,9 @@ class Detr3DHead(DETRHead):
                 gt_attnmap_filter = gt_attnmap[-1:,:,gt_pl_have][:,:,:,gt_pl_have]
                 pred_attnmap_filter = new_map[-1:,:,gt_pl_have][:,:,:,gt_pl_have]
                 
-                use_all_map = False
-                if use_all_map:
+                # use_all_map = False
+                if self.use_all_map:
+                    assert False
                     pass
                 else:
                     gt_attnmap_filter = gt_attnmap_filter[-1:,:,0,:] # 只拿出cls_emb对其他的weights
