@@ -1,16 +1,16 @@
 from glob import glob
 import mmcv
 
-a = 'output/output/detr_eval_split/还没跑完2023-02-16_19:20:36'
-b = 'output/output/detr_eval_split/2023-02-17_10:55:27'
+a = '/mnt/disk02/hrz/ndetr/output/output/detr_eval_split/bs_box_attnmap/2023-02-18_10:39:45'
+# b = 'output/output/detr_eval_split/2023-02-17_10:55:27'
 fa = glob(f"{a}/*json")
-fb = glob(f"{b}/*json")
+# fb = glob(f"{b}/*json")
 print(len(fa))
-print(len(fb))
+# print(len(fb))
 files = []
 files.extend(fa)
-files.extend(fb)
-print(len(files))
+# files.extend(fb)
+# print(len(files))
 
 composed=0
 penalty=0

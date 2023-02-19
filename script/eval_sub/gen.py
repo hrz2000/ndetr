@@ -1,7 +1,7 @@
 import mmcv
 import time
 
-num = 8
+num = 4
 evalx = [[] for t in range(num)]
 
 experiments='debug'
@@ -9,7 +9,7 @@ datagen=0
 # eval_="longest6_debug"
 eval_="longest6"
 resume=1
-timeout=600000
+timeout=60000
 unblock=False
 repetitions=1
 save_path='output/output/detr_eval_split' + "/bs_box_attnmap/" + time.strftime('%Y-%m-%d_%H:%M:%S')

@@ -823,6 +823,13 @@ class Detr3DHead(DETRHead):
                 gt_pl_have = np.array(gt_pl_lack) == False
                 gt_attnmap_filter = gt_attnmap[-1:,:,gt_pl_have][:,:,:,gt_pl_have]
                 pred_attnmap_filter = new_map[-1:,:,gt_pl_have][:,:,:,gt_pl_have]
+                
+                use_all_map = False
+                if use_all_map:
+                    pass
+                else:
+                    gt_attnmap_filter = gt_attnmap_filter[-1:,:,0,:] # 只拿出cls_emb对其他的weights
+                    pred_attnmap_filter = pred_attnmap_filter[-1:,:,0,:]
 
                 gt_attnmap_filter_sum1 = gt_attnmap_filter.sum(-1)
                 gt_attnmap_filter_sum1 += 0.00001

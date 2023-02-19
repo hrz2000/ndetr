@@ -6,6 +6,7 @@ from glob import glob
 import numpy as np
 import argparse
 from tqdm import tqdm
+import mmcv
 
 def image_to_video(image_path, media_path):
     '''
@@ -15,7 +16,8 @@ def image_to_video(image_path, media_path):
     :return:
     '''
     # 获取图片路径下面的所有图片名称
-    image_names = glob(image_path)
+    # image_names = glob(image_path)
+    image_names = mmcv.list_from_file('a.log')
     print(f"imgs num: {len(image_names)}")
     # 对提取到的图片名称进行排序
     image_names.sort()

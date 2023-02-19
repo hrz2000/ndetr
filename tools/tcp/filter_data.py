@@ -5,8 +5,9 @@ import tqdm
 from glob import glob
 import shutil
 import os.path as osp
+import re
 
-def remove_files(root, index, items = {"bev":".png", "meta":".json", "rgb":".png", "supervision":".npy"}):
+def remove_files(root, index, items = {"bev":".png", "meta":".json", "rgb":".png", "supervision":".npy"}, by_idxs=False):
 	# items = {"measurements":".json", "rgb_front":".png"}
 	items = {}
 	sub_folders = list(os.listdir(root))
@@ -15,13 +16,31 @@ def remove_files(root, index, items = {"bev":".png", "meta":".json", "rgb":".png
 			break
 		items[sub_folder] = "." + list(os.listdir(os.path.join(root, sub_folder)))[0].split(".")[-1]
 	# {'topdown': '.png', 'attnmap': '.pkl', 'boxes': '.json', 'measurements': '.json', 'hdmap0': '.png', 'hdmap1': '.png', 'rgb': '.png'}
-	for k, v in items.items():
-		data_folder = os.path.join(root, k)
-		total_len = len(os.listdir(data_folder)) # 从这个索引到最后
-		for i in range(index, total_len):
-			file_name = str(i).zfill(4) + v
-			file_name = os.path.join(data_folder, file_name)
-			os.remove(file_name)
+	if by_idxs==False:
+		rm_sth = False
+		for k, v in items.items():
+			data_folder = os.path.join(root, k)
+			total_len = len(os.listdir(data_folder)) # 从这个索引到最后
+			for i in range(index, total_len): # 多次执行中间层可能有间断
+				file_name = str(i).zfill(4) + v
+				file_name = os.path.join(data_folder, file_name)
+				try:
+					os.remove(file_name)
+					rm_sth = True
+				except:
+					pass
+		return rm_sth
+	else:
+		for k, v in items.items():
+			data_folder = os.path.join(root, k)
+			for idx in index:
+				file_name = str(idx).zfill(4) + v
+				file_name = os.path.join(data_folder, file_name)
+				try:
+					os.remove(file_name)
+				except:
+					pass
+    
 
 def func(folder, checkpoint):
 	data_folder=f'{folder}/Routes_{checkpoint}'
@@ -33,42 +52,136 @@ def func(folder, checkpoint):
 	for index, record in enumerate(records):
 		dirs = glob(f"{data_folder}/{checkpoint}_route{index}_*")
 		dirs = sorted(dirs)
+  
+		# 可能有一个rourte跑多次的情况进行处理
 		if len(dirs) != 1:
-			# import pdb;pdb.set_trace()
+			import pdb;pdb.set_trace()
 			for i, d in enumerate(dirs):
 				if i!=len(dirs)-1:
 					# os.removedirs(d)
 					shutil.rmtree(d)
+     
 		route_data_folder = dirs[-1]
-		total_length=len(glob(f'{route_data_folder}/measurements/*.json'))
+		measlist=sorted(glob(f'{route_data_folder}/measurements/*.json'))
+		length = len(measlist)
+		if len(measlist) == 0:
+			break
+		last_meas=f'{route_data_folder}/measurements/{length-1:04d}.json'
 		if record["scores"]["score_composed"] >= 100:
 			continue
-		# timeout or blocked, remove the last ones where the vehicle stops
-		if len(record["infractions"]["route_timeout"]) > 0 or \
-			len(record["infractions"]["vehicle_blocked"]) > 0:
-				stop_index = 0
-				for i in range(total_length-1, 0, -1):
-					with open(os.path.join(route_data_folder, "measurements", str(i).zfill(4)) + ".json", 'r') as mf:
-						speed = json.load(mf)["speed"]
-						if speed > 0.1:
-							stop_index = i
-							break
-				stop_index = min(total_length, stop_index + 20) # 在stop_index后面20帧就行
-				print((route_data_folder, stop_index))
-				remove_files(route_data_folder, stop_index)
-		# collision or red-light
-		elif len(record["infractions"]["red_light"]) > 0 or \
+
+		if len(record["infractions"]["red_light"]) > 0 or \
 			len(record["infractions"]["collisions_pedestrian"]) > 0 or \
 			len(record["infractions"]["collisions_vehicle"]) > 0 or \
-			len(record["infractions"]["collisions_layout"]) > 0:
-			stop_index = max(0, total_length-10) # 遇到这种碰撞的情况，删掉后10个
-			print((route_data_folder, stop_index)) # 注意这个可能会导致重复的删除
-			remove_files(route_data_folder, stop_index)
+			len(record["infractions"]["collisions_layout"]) > 0 or \
+			len(record["infractions"]["route_timeout"]) > 0 or \
+			len(record["infractions"]["vehicle_blocked"]) > 0:
+       
+			idxs_dict = get_idxs_should_rm(record, route_data_folder, last_meas)
+			idxs = []
+			for k,v in idxs_dict.items():
+				# idxs.extend(v)
+				meas = get_meas_list(route_data_folder, v)
+				if len(meas) > 0:
+					with open(f'filter_{k}.log', 'a') as f:
+						f.write("\n".join(meas)+'\n')
+    
+def get_meas_list(route_data_folder, idxs):
+    return [f"{route_data_folder}/vis/{idx:04d}.png" for idx in idxs]
+
+def get_idxs_should_rm(record, route_data_folder, last_meas):
+	red_light_events = record["infractions"]['red_light']
+	vehicle_blockeds = record["infractions"]['vehicle_blocked']
+	route_timeouts = record["infractions"]['route_timeout']
+	colli_events = (record["infractions"]['collisions_pedestrian'])
+	colli_events.extend(record["infractions"]['collisions_vehicle'])
+	colli_events.extend(record["infractions"]['collisions_layout'])
+ 
+	pattern = re.compile(r"at \(x=(.*?), y=(.*?), z=(.*?)\)") # r"\d"表示匹配任意一个数字
+	colli_scenes = []
+	for e_str in colli_events:
+		match = re.search(pattern, e_str)
+		x, y = float(match[1]), float(match[2])
+		colli_scenes.append((x,y))	
+  
+	red_scenes = []
+	for e_str in red_light_events:
+		match = re.search(pattern, e_str)
+		x, y = float(match[1]), float(match[2])
+		red_scenes.append((x,y))
+
+	block_scenes = []
+	for e_str in vehicle_blockeds:
+		match = re.search(pattern, e_str)
+		x, y = float(match[1]), float(match[2])
+		block_scenes.append((x,y))
+
+	timeout_scenes = []
+	if len(route_timeouts) > 0:
+		with open(os.path.join(last_meas), 'r') as f:
+			meas = json.load(f)
+			posx, posy = meas['pos_global']
+		timeout_scenes.append((posx,posy))
+  
+	should_rm_idxs = {}
+	should_rm_idxs['col'] = []
+	should_rm_idxs['block'] = []
+	should_rm_idxs['timeout'] = []
+	should_rm_idxs['red'] = []
+	# total_length=len()
+	# 需要确保是连续的
+	length = len(glob(f'{route_data_folder}/measurements/*.json'))
+	for idx in range(length):
+		# idx = int(os.path.splitext(os.path.basename(meas_path))[0])
+		# print(idx)
+		should_rm = False
+		meas_file = f'{route_data_folder}/measurements/{idx:04d}.json'
+		if not os.path.exists(meas_file):
+			continue
+		with open(os.path.join(meas_file), 'r') as f:
+			meas = json.load(f)
+			posx,posy = meas['pos_global']
+			# posx,posy = int(posx), int(posy)
+
+			for x,y in colli_scenes:
+				if (posx >= x-5 and posx <= x+5 ) and (posy>=y-5 and posy <= y+5):
+					should_rm = True
+					# should_rm_idxs.append(idx)
+					should_rm_idxs['col'].append(idx)
+					break
+			if should_rm == True:
+				continue
+
+			for x,y in red_scenes:
+				if (posx >= x-10 and posx <= x+10 ) and (posy>=y-10 and posy <= y+10):
+					should_rm = True
+					should_rm_idxs['red'].append(idx)
+					break
+			if should_rm == True:
+				continue
+
+			for x,y in block_scenes:
+				if (posx >= x-0.3 and posx <= x+0.3 ) and (posy>=y-0.3 and posy <= y+0.3):
+					should_rm = True
+					should_rm_idxs['block'].append(idx)
+					break
+			if should_rm == True:
+				continue
+
+			for x,y in timeout_scenes:
+				if (posx >= x-0.3 and posx <= x+0.3 ) and (posy>=y-0.3 and posy <= y+0.3):
+					should_rm_idxs['timeout'].append(idx)
+					break
+	return should_rm_idxs
 
 if __name__ == '__main__':
-	folders = glob('/home/BuaaClass01/hrz/ndetr/output/plant_datagen/PlanT_data_1/*')
+	folders = glob('output/plant_datagen2/PlanT_data_1/*')
+	for k in ['col','red','block','timeout']:
+		with open(f'filter_{k}.log', 'w') as f:
+			pass
+	# folders = glob('output/datagen_l6/*')
 	for folder in folders:
-		print(f"\nstart folder: {folder}************")
+		# print(f"\nstart folder: {folder}************")
 		checkpoints = glob(f'{folder}/*.json')
 		for checkpoint in checkpoints:
 			checkpoint = osp.splitext(osp.basename(checkpoint))[0]

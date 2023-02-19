@@ -40,7 +40,7 @@ def update_wandb_at_curdir():
 
 if __name__ == '__main__':
     dirs = [
-        'work_dirs/bs_box_attnmap/2023-02-16_12:36:22',
+        'work_dirs/bs_box_attnmap/save_2023-02-17_21:46:13/',
     ]
     for dir in dirs:
         os.chdir(dir)
