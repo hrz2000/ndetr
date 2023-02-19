@@ -88,8 +88,8 @@ def load_dataset(k, dataset, intri, sensor2vl_r, sensor2vl_t, name):
         gt_names = classes[gt_labels]
         
         fv = item['img_metas']['img_filename']
-        import pdb;pdb.set_trace()
         if fv in filter_all:
+            print('skip one')
             continue
 
         item = dict(
