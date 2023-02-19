@@ -189,7 +189,7 @@ class CustomNuScenesDataset(Custom3DDataset):
         self.version = self.metadata['version']
         if self.debug: # TODO
             # import pdb;pdb.set_trace()
-            data_infos = data_infos[1170:1199]
+            data_infos = data_infos[1190:1191]
         elif self.in_test:
             # data_infos = data_infos[:5]
             data_infos = data_infos[0:1210]

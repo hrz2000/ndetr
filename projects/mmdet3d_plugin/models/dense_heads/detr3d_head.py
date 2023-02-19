@@ -698,7 +698,6 @@ class Detr3DHead(DETRHead):
         label_weights = torch.cat(label_weights_list, 0)
         bbox_targets = torch.cat(bbox_targets_list, 0) # torch.Size([1600, 9]) 表示在9个属性上操作, 9个数行对应的value是什么
         bbox_weights = torch.cat(bbox_weights_list, 0) # torch.Size([1600=32*50, 10])
-        # import pdb;pdb.set_trace()
 
         # classification loss
         cls_scores = cls_scores.reshape(-1, self.cls_out_channels)
@@ -806,7 +805,7 @@ class Detr3DHead(DETRHead):
                 last_layer_batchi_gt = new_gt_idxs_list_layers[-1][batch_id].to(torch.int) # 每个gt对应着那些位置也是需要明确的
                 gt_idxs = gt_idxs_list[batch_id]
                 attnmap = inter_attnmap[batch_id] # torch.Size([6, 8, 53, 53])
-                # attnmap = attnmap[-1:] # 最后一层的
+                # import pdb;pdb.set_trace()
                 
                 gt_attnmap = attnmap.new_tensor(img_metas[batch_id]['attnmap'])
                 assert gt_attnmap.shape[-1] == 1 + len(gt_idxs) + 1
@@ -825,6 +824,8 @@ class Detr3DHead(DETRHead):
                 # 只要最后一层
                 gt_attnmap = gt_attnmap[-1:]
                 new_map = new_map[-1:]
+                # gt_attnmap = gt_attnmap[-1:]
+                # new_map = new_map[:]
                 
                 gt_pl_lack = img_metas[batch_id]['gt_pl_lack']
                 gt_pl_have = np.array(gt_pl_lack) == False
@@ -855,11 +856,14 @@ class Detr3DHead(DETRHead):
                 pred_attnmap_filter = (pred_attnmap_filter / pred_attnmap_filter_sum1[...,None]) # 这样又不是
                 # torch.Size([1, 8, 11, 11])
                 
-                isnotnan = torch.logical_and(torch.isfinite(pred_attnmap_filter), torch.isfinite(gt_attnmap_filter)) # 应该不会有作用，因为我使用了clamp, torch.Size([1, 8, 15, 15])
+                # isnotnan = torch.logical_and(torch.isfinite(pred_attnmap_filter), torch.isfinite(gt_attnmap_filter)) # 应该不会有作用，因为我使用了clamp, torch.Size([1, 8, 15, 15])
                 
                 # import pdb;pdb.set_trace()
                 
-                loss_attnmap = F.l1_loss(gt_attnmap_filter[isnotnan], pred_attnmap_filter[isnotnan]) # layer层面
+                # loss_attnmap = F.l1_loss(gt_attnmap_filter[isnotnan], pred_attnmap_filter[isnotnan]) # layer层面
+                # import pdb;pdb.set_trace()
+                n_pred_layer = pred_attnmap_filter.shape[0]
+                loss_attnmap = F.l1_loss(gt_attnmap_filter.repeat(n_pred_layer,1,1), pred_attnmap_filter) # layer层面
                 if torch.isnan(loss_attnmap): ## 遇到了nan，发现是因为isnotnan全是false，学成了这样
                     import pdb;pdb.set_trace()
                     
