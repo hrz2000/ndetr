@@ -42,6 +42,7 @@ __pycache__/
 *.zip
 /vis*
 /*.xodr
+/*.html
 
 # Distribution / packaging
 .Python
