@@ -1,15 +1,20 @@
 from glob import glob
 import mmcv
 import numpy as np
+import os.path as osp
 
 a = '/mnt/disk02/hrz/ndetr/output/output/detr_eval_split/bs_box_attnmap/2023-02-18_10:39:45'
 # b = 'output/output/detr_eval_split/2023-02-17_10:55:27'
 fa = glob(f"{a}/*json")
+
 # fb = glob(f"{b}/*json")
 print(len(fa))
 # print(len(fb))
 files = []
 files.extend(fa)
+import pdb;pdb.set_trace()
+
+files.sort(key=lambda x:int(osp.splitext(osp.basename(x))[0])) # 升序
 # files.extend(fb)
 # print(len(files))
 
