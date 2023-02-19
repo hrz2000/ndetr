@@ -59,10 +59,13 @@ class NMSFreeCoder(BaseBBoxCoder):
         if attnmap is not None:
             # 8个头需要平均一下
             # attnmap = attnmap.mean(0)
-            attnmap = attnmap[1] # 第一个head
-            wp_attn = attnmap[0][3:] # torch.Size([300, 10])
+            # attnmap = attnmap[1] # 第一个head
+            wp_wp = attnmap[:,0,0:1] # 
+            wp_route = attnmap[:,0,1:2] # TODO
+            wp_attn = attnmap[:,0,3:] # torch.Size([300, 10])
+            # 这里进行了抛弃前三个东西的操作
             assert wp_attn.shape[-1] == 50
-            wp_attn = wp_attn[bbox_index]
+            wp_attn = wp_attn[:,bbox_index]
         else:
             wp_attn = None
             
@@ -105,7 +108,10 @@ class NMSFreeCoder(BaseBBoxCoder):
             scores = final_scores[mask]
             labels = final_preds[mask]
             if wp_attn is not None:
-                wp_attn = wp_attn[mask]
+                wp_attn = wp_attn[:,mask]
+                # import pdb;pdb.set_trace()
+                wp_attn = torch.cat([wp_wp, wp_attn, wp_route],dim=-1) # TODO
+                
             if new_gt_idxs_list is not None:
                 new_gt_idxs_list = new_gt_idxs_list[mask]
             predictions_dict = {

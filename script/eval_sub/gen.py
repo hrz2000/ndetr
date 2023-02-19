@@ -13,8 +13,8 @@ timeout=60000
 unblock=False
 repetitions=1
 save_path='output/output/detr_eval_split' + "/bs_box_attnmap/" + time.strftime('%Y-%m-%d_%H:%M:%S')
-config="projects/configs/detr3d/new/bs_box_attnmap.py"
-checkpoint='work_dirs/bs_box_attnmap/save_2023-02-17_21:46:13/epoch_18.pth'
+config="projects/configs/detr3d/new/bs_box_wpattn.py"
+checkpoint='work_dirs/bs_box_wpattn/2023-02-19_10:40:09/epoch_18.pth'
 track='MAP'
 
 for idx in range(36):

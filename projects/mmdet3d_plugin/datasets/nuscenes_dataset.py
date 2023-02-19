@@ -189,8 +189,8 @@ class CustomNuScenesDataset(Custom3DDataset):
         self.version = self.metadata['version']
         if self.debug: # TODO
             # import pdb;pdb.set_trace()
-            data_infos = data_infos[1181:1190]
-        if self.in_test:
+            data_infos = data_infos[1170:1199]
+        elif self.in_test:
             # data_infos = data_infos[:5]
             data_infos = data_infos[0:1210]
         return data_infos
@@ -335,6 +335,9 @@ class CustomNuScenesDataset(Custom3DDataset):
         
         gt_pl_lack = pl_box_idxs==-1
         
+        if gt_pl_lack.sum() > 0:
+            import pdb;pdb.set_trace()
+        
         # import pdb;pdb.set_trace()
         # gt_idxs: [1501, 1510, 1549, 1600, 1603, 1674, 1706, 1716, 1732, 1736]
         #           [1,     3,   6,    9, 10, 16, 18, 19, 20, 21]
@@ -360,7 +363,7 @@ class CustomNuScenesDataset(Custom3DDataset):
         assert attnmap.shape[-1] == 1 + len(gt_idxs) + 1
         
         # import pdb;pdb.set_trace()
-        wp_attn = attnmap[-1,1,0,:] # wp对所有（wp、box、route）第一个head
+        wp_attn = attnmap[-1,:,0,:] # wp对所有（wp、box、route）第一个head
         # wp_attn = attnmap[-1,:,0,:].mean(0) # wp对所有（wp、box、route）
         # 我们需要把wp_attn补全到和gt_idxs一样的格式
         # 对gt可视化的时候，前面concat上了ego
@@ -395,8 +398,8 @@ class CustomNuScenesDataset(Custom3DDataset):
             boxes_3d=LiDARInstance3DBoxes.cat([ego_box_3d, gt_bboxes_3d]),
             scores_3d=np.ones_like([1,*gt_labels_3d]),
             labels_3d=np.array([1,*gt_labels_3d]),
-            gt_idxs=np.array([0,*gt_idxs]),
-            wp_attn=np.array([0,*wp_attn]),
+            gt_idxs=np.array([0,*gt_idxs]), # 第一个是ego
+            wp_attn=np.array([*wp_attn]), # 第一个是ego那个cls_emb，后面都正常索引
             
             attrs_3d=data_info['plan']['wp'],
             tp=data_info['plan']['tp'],
@@ -888,25 +891,25 @@ def show_results(index, pred_pts_bbox, gt_pts_bbox, out_dir, img=None, in_simu=F
     all_img[:h,:w] = front_img
     all_img[h:h+bh,(w-bw)//2:(w-bw)//2+bw] = bev_img
     
-    if not in_simu:
-        front_img = all_img
-        bev_img = pred_pts_bbox['attnmap'] # 没问题
-        bev_img = bev_img[...,None]*255
-        # a,b,c = n_bev_img.shape
-        # bev_img = np.array(a*3,b*3,c)
-        plt.figure(figsize=(8,1))
-        plt.imshow(bev_img)
-        plt.axis('off')
-        plt.savefig('./a.png', bbox_inches='tight')
-        plt.close()
-        bev_img=mmcv.imread('./a.png')
+    # if not in_simu:
+    #     front_img = all_img
+    #     bev_img = pred_pts_bbox['attnmap'] # 没问题
+    #     bev_img = bev_img[...,None]*255
+    #     # a,b,c = n_bev_img.shape
+    #     # bev_img = np.array(a*3,b*3,c)
+    #     plt.figure(figsize=(8,1))
+    #     plt.imshow(bev_img)
+    #     plt.axis('off')
+    #     plt.savefig('./a.png', bbox_inches='tight')
+    #     plt.close()
+    #     bev_img=mmcv.imread('./a.png')
         
-        h, w, _ = front_img.shape
-        bh, bw, _ = bev_img.shape
-        all_img = np.zeros((h+bh,max(w,bw),3)) # 黑色背景
-        # all_img = np.full(shape=(h+s,max(w,s),3),fill_value=255) # 白色背景
-        all_img[:h,:w] = front_img
-        all_img[h:h+bh,(w-bw)//2:(w-bw)//2+bw] = bev_img
+    #     h, w, _ = front_img.shape
+    #     bh, bw, _ = bev_img.shape
+    #     all_img = np.zeros((h+bh,max(w,bw),3)) # 黑色背景
+    #     # all_img = np.full(shape=(h+s,max(w,s),3),fill_value=255) # 白色背景
+    #     all_img[:h,:w] = front_img
+    #     all_img[h:h+bh,(w-bw)//2:(w-bw)//2+bw] = bev_img
     
     mmcv.imwrite(all_img, f'{out_dir}/{index:05d}.png')
 

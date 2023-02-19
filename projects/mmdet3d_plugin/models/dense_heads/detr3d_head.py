@@ -821,18 +821,30 @@ class Detr3DHead(DETRHead):
                         sorted_idxs.append(pred_idx+3) # 前面有wp_emb, TODO: 这里需要假定extra_query为3
                 sorted_idxs = [self.wp_query_pos, *sorted_idxs, self.route_query_pos]
                 new_map = attnmap[:,:,sorted_idxs][:,:,:,sorted_idxs] # torch.Size([6, 8, 12, 12])
+                
+                # 只要最后一层
+                gt_attnmap = gt_attnmap[-1:]
+                new_map = new_map[-1:]
+                
                 gt_pl_lack = img_metas[batch_id]['gt_pl_lack']
                 gt_pl_have = np.array(gt_pl_lack) == False
-                gt_attnmap_filter = gt_attnmap[-1:,:,gt_pl_have][:,:,:,gt_pl_have]
-                pred_attnmap_filter = new_map[-1:,:,gt_pl_have][:,:,:,gt_pl_have]
+                
+                gt_attnmap_filter = gt_attnmap[:,:,gt_pl_have][:,:,:,gt_pl_have]
+                pred_attnmap_filter = new_map[:,:,gt_pl_have][:,:,:,gt_pl_have]
+                # pred对应没有的也不监督
+                
+                # 只监督最后一层可以吗？
+                # 我的gt_attnmap已经和gt_idxs对齐了，除了前面1个cls_emb，后面一个route
+                # 所以只需要对预测的map进行调整，拿出cls_emb，obj，route_emb
                 
                 # use_all_map = False
                 if self.use_all_map:
-                    assert False
+                    # assert False
                     pass
                 else:
-                    gt_attnmap_filter = gt_attnmap_filter[-1:,:,0,:] # 只拿出cls_emb对其他的weights
-                    pred_attnmap_filter = pred_attnmap_filter[-1:,:,0,:]
+                    gt_attnmap_filter = gt_attnmap_filter[:,:,0,:]
+                    pred_attnmap_filter = pred_attnmap_filter[:,:,0,:]
+                    # 只拿出cls_emb对其他的weights
 
                 gt_attnmap_filter_sum1 = gt_attnmap_filter.sum(-1)
                 gt_attnmap_filter_sum1 += 0.00001
@@ -841,8 +853,11 @@ class Detr3DHead(DETRHead):
                 pred_attnmap_filter_sum1 = pred_attnmap_filter.sum(-1) # 感觉是因为这个值太小导致的
                 pred_attnmap_filter_sum1 += 0.00001
                 pred_attnmap_filter = (pred_attnmap_filter / pred_attnmap_filter_sum1[...,None]) # 这样又不是
+                # torch.Size([1, 8, 11, 11])
                 
                 isnotnan = torch.logical_and(torch.isfinite(pred_attnmap_filter), torch.isfinite(gt_attnmap_filter)) # 应该不会有作用，因为我使用了clamp, torch.Size([1, 8, 15, 15])
+                
+                # import pdb;pdb.set_trace()
                 
                 loss_attnmap = F.l1_loss(gt_attnmap_filter[isnotnan], pred_attnmap_filter[isnotnan]) # layer层面
                 if torch.isnan(loss_attnmap): ## 遇到了nan，发现是因为isnotnan全是false，学成了这样

@@ -270,6 +270,12 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
     matched_idxs = pred_pts_bbox.get('matched_idxs', None)
     pred_bbox = pred_pts_bbox.get('boxes_3d', None)
     wp_attn = pred_pts_bbox.get('wp_attn', None)
+    
+    gt_wp_attn = gt_wp_attn.mean(0)
+    wp_attn = wp_attn.mean(0)
+    # gt_wp_attn = gt_wp_attn[1]
+    # wp_attn = wp_attn[1]
+    
     for box_type_idx, (bbox, c) in enumerate([(gt_bbox,"chartreuse"), (pred_bbox,"dodgerblue")]):
         if bbox is None:
             continue
@@ -306,16 +312,35 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
                 
                 if box_type_idx==1: # 预测
                     if wp_attn is not None:
-                        draw.text((endx1+30, endy1), f"{wp_attn[idx]:.2f}", fill='blue')
+                        draw.text((endx1+30, endy1), f"{wp_attn[idx+1]:.2f}", fill='blue')
+                        # 第一个东西是对cls_emb的attn 错误
+                        # 这个东西是和预测阈值的数量挂钩的，是过滤后的东西，倒是可以在前后拼接
+                        # 这个+1没问题
                     if matched_idxs is not None:
                         draw.text((endx1+30+30, endy1), f"{int(matched_idxs[idx])}", fill='blue')
                 else:
                     if gt_wp_attn is not None:
                         # gt_wp_attn比gt_idxs多一些，因为由对route的attn
                         # import pdb;pdb.set_trace()
-                        draw.text((endx1+30+60, endy1), f"{gt_wp_attn[idx+1]:.2f}", fill='green') # 第一个东西不是随便添加的，是cls_emb对自己的
+                        draw.text((endx1+30+60, endy1), f"{gt_wp_attn[idx]:.2f}", fill='green') 
+                        # 第一个东西是对cls_emb的attn，第一次是ego对应attn是ego，没问题
                     if gt_idxs is not None:
                         draw.text((endx1+30+90, endy1), f"{int(gt_idxs[idx])}", fill='green') 
+    
+    # import pdb;pdb.set_trace()
+    # if len(gt_wp_attn) != len(wp_attn):
+    #     # import pdb;pdb.set_trace()
+    #     print(len(gt_wp_attn),len(wp_attn))
+    if gt_wp_attn is not None and wp_attn is not None:
+        assert len(gt_idxs) + 2 - 1 == len(gt_wp_attn) # 因为gt_idxs在可视化获取box的时候进行了前面补0，所以会多出一个
+        str1 = ",".join([f"{t*100:.0f}" for t in gt_wp_attn])
+        str1_ = "ego,"+','.join([f"{t:.0f}" for i,t in enumerate(gt_idxs) if i>0])+',route'
+        str2 = ",".join([f"{t*100:.0f}" for t in wp_attn])
+        str2_ = 'ego, ..., route1'
+        draw.text((10,250), str1, fill='green') 
+        draw.text((10,230), str1_, fill='green') 
+        draw.text((10,270), str2, fill='blue') 
+        draw.text((10,290), str2_, fill='blue') 
     
     gt_wp = copy.deepcopy(gt_pts_bbox.get('attrs_3d', None))
     pred_wp = copy.deepcopy(pred_pts_bbox.get('attrs_3d', None))
