@@ -181,7 +181,9 @@ def get_idxs_should_rm(record, route_data_folder, last_meas):
 	return should_rm_idxs
 
 if __name__ == '__main__':
-	folders = glob('output/plant_datagen/PlanT_data_1/*')
+	# folders = glob('output/plant_datagen/PlanT_data_1/*')
+	folders = glob('s3://tr_plan_hrz/PlanT_data_1/*')
+	# import pdb;pdb.set_trace()
 	for k in ['all','col','red','block','timeout']:
 		with open(f'filter_{k}.log', 'w') as f:
 			pass
