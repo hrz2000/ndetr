@@ -274,9 +274,8 @@ lr_config = dict(
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
     min_lr_ratio=1e-3)
-total_epochs = 180
-evaluation = dict(interval=60, pipeline=test_pipeline, save_best="wp", less_keys=['wp'])
-checkpoint_config = dict(interval=60)
+total_epochs = 18
+evaluation = dict(interval=3, pipeline=test_pipeline, save_best="wp", less_keys=['wp'])
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 # load_from='pretrain/route.pth'
