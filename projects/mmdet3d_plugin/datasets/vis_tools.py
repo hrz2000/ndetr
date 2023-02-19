@@ -271,8 +271,10 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
     pred_bbox = pred_pts_bbox.get('boxes_3d', None)
     wp_attn = pred_pts_bbox.get('wp_attn', None)
     
-    gt_wp_attn = gt_wp_attn.mean(0)
-    wp_attn = wp_attn.mean(0)
+    if gt_wp_attn is not None:
+        gt_wp_attn = gt_wp_attn.mean(0)
+    if wp_attn is not None:
+        wp_attn = wp_attn.mean(0)
     # gt_wp_attn = gt_wp_attn[1]
     # wp_attn = wp_attn[1]
     
