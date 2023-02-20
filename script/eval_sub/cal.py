@@ -3,7 +3,7 @@ import mmcv
 import numpy as np
 import os.path as osp
 
-a = '/mnt/disk02/hrz/ndetr/output/output/detr_eval_split/bs_box_attnmap/2023-02-18_10:39:45'
+a = '/mnt/disk02/hrz/ndetr/output/output/detr_eval_split/bs_box_wpattn/2023-02-19_22:34:21/33.json'
 # b = 'output/output/detr_eval_split/2023-02-17_10:55:27'
 fa = glob(f"{a}/*json")
 

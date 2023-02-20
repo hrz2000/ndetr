@@ -842,6 +842,7 @@ class Detr3DHead(DETRHead):
                 if self.use_all_map:
                     # assert False
                     pass
+                    # 需要调整后面对帧的监督
                 else:
                     gt_attnmap_filter = gt_attnmap_filter[:,:,0,:]
                     pred_attnmap_filter = pred_attnmap_filter[:,:,0,:]
@@ -862,8 +863,12 @@ class Detr3DHead(DETRHead):
                 
                 # loss_attnmap = F.l1_loss(gt_attnmap_filter[isnotnan], pred_attnmap_filter[isnotnan]) # layer层面
                 # import pdb;pdb.set_trace()
-                n_pred_layer = pred_attnmap_filter.shape[0]
-                loss_attnmap = F.l1_loss(gt_attnmap_filter.repeat(n_pred_layer,1,1), pred_attnmap_filter) # layer层面
+                n_pred_layer = pred_attnmap_filter.shape[0] # torch.Size([1, 8, 3, 3])
+                if self.use_all_map:
+                    loss_attnmap = F.l1_loss(gt_attnmap_filter.repeat(n_pred_layer,1,1,1), pred_attnmap_filter) # layer层面
+                else:
+                    loss_attnmap = F.l1_loss(gt_attnmap_filter.repeat(n_pred_layer,1,1), pred_attnmap_filter) # layer层面\
+                        
                 if torch.isnan(loss_attnmap): ## 遇到了nan，发现是因为isnotnan全是false，学成了这样
                     import pdb;pdb.set_trace()
                     
