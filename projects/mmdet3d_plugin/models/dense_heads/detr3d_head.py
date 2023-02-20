@@ -265,8 +265,10 @@ class Detr3DHead(DETRHead):
                 enable_uncertainty_loss_weight = True,
                 loss_weights = None,
                 use_all_map = True,
+                use_l2 = False,
                  **kwargs
                  ):
+        self.use_l2 = use_l2
         self.use_all_map = use_all_map
         self.use_gt_light = use_gt_light
         self.wp_refine = wp_refine
@@ -865,9 +867,16 @@ class Detr3DHead(DETRHead):
                 # import pdb;pdb.set_trace()
                 n_pred_layer = pred_attnmap_filter.shape[0] # torch.Size([1, 8, 3, 3])
                 if self.use_all_map:
-                    loss_attnmap = F.l1_loss(gt_attnmap_filter.repeat(n_pred_layer,1,1,1), pred_attnmap_filter) # layer层面
+                    if self.use_l2:
+                        loss_attnmap = F.mse_loss(gt_attnmap_filter.repeat(n_pred_layer,1,1,1), pred_attnmap_filter) # layer层面
+                    else:
+                        loss_attnmap = F.l1_loss(gt_attnmap_filter.repeat(n_pred_layer,1,1,1), pred_attnmap_filter) # layer层面
                 else:
-                    loss_attnmap = F.l1_loss(gt_attnmap_filter.repeat(n_pred_layer,1,1), pred_attnmap_filter) # layer层面\
+                    
+                    if self.use_l2:
+                        loss_attnmap = F.mse_loss(gt_attnmap_filter.repeat(n_pred_layer,1,1), pred_attnmap_filter) # layer层面
+                    else:
+                        loss_attnmap = F.l1_loss(gt_attnmap_filter.repeat(n_pred_layer,1,1,1), pred_attnmap_filter) # layer层面
                         
                 if torch.isnan(loss_attnmap): ## 遇到了nan，发现是因为isnotnan全是false，学成了这样
                     import pdb;pdb.set_trace()

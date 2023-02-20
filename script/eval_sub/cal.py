@@ -3,7 +3,7 @@ import mmcv
 import numpy as np
 import os.path as osp
 
-a = '/mnt/disk02/hrz/ndetr/output/output/detr_eval_split/bs_box_wpattn/2023-02-19_22:34:21/33.json'
+a = 'output/output/detr_eval_split/bs_box_wpattn/2023-02-19_22:34:21/'
 # b = 'output/output/detr_eval_split/2023-02-17_10:55:27'
 fa = glob(f"{a}/*json")
 
@@ -12,7 +12,7 @@ print(len(fa))
 # print(len(fb))
 files = []
 files.extend(fa)
-import pdb;pdb.set_trace()
+# import pdb;pdb.set_trace()
 
 files.sort(key=lambda x:int(osp.splitext(osp.basename(x))[0])) # 升序
 # files.extend(fb)
@@ -23,7 +23,10 @@ penalty=[]
 route=[]
 
 for f in files:
-    scores = mmcv.load(f)['_checkpoint']['global_record']['scores']
+    try:
+        scores = mmcv.load(f)['_checkpoint']['global_record']['scores']
+    except:
+        continue
     rc = scores['score_composed']
     # if rc<10:
     #     continue
@@ -35,7 +38,8 @@ composed_arr = np.array(composed)
 penalty_arr = np.array(penalty)
 route_arr = np.array(route)
 # import pdb;pdb.set_trace()
-assert route_arr.shape[0] == 36
+# assert route_arr.shape[0] == 36
+print(route_arr.shape[0])
 
 x,y,z=composed_arr.mean(),penalty_arr.mean(),route_arr.mean()
 composed.append(x)

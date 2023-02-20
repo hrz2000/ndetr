@@ -1,2 +1,2 @@
-on_cc=True
+on_cc=False
 enable_mc=False
