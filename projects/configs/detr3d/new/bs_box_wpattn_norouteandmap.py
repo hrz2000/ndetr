@@ -1,8 +1,7 @@
 _base_ = ['../../../../mmdetection3d/configs/_base_/datasets/nus-3d.py']
 from projects.configs.detr3d.new.common import *
 
-train_ann_file = './data/carla_train_hdmap_all_filter.pkl'
-val_ann_file = './data/carla_val_hdmap_all_filter.pkl'
+find_unused_parameters=True
 use_all_map=False
 use_gt_light=False
 use_det_metric=False
@@ -84,8 +83,8 @@ model = dict(
         transformer=dict(
             type='Detr3DTransformer',
             use_wp_query = True,
-            use_bev_query = True,
-            use_route_query = True,
+            use_bev_query = 'no',
+            use_route_query = 'no',
             route_num_attributes = 6,
             use_type_emb = True,
             wp_refine = wp_refine,

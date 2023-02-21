@@ -1,8 +1,6 @@
 _base_ = ['../../../../mmdetection3d/configs/_base_/datasets/nus-3d.py']
 from projects.configs.detr3d.new.common import *
 
-train_ann_file = './data/carla_train_hdmap_all_filter.pkl'
-val_ann_file = './data/carla_val_hdmap_all_filter.pkl'
 use_all_map=False
 use_gt_light=False
 use_det_metric=False
@@ -15,8 +13,8 @@ workers=4
 lr=2e-4
 num_query=50
 
-wp_refine=None # gru, linear, None
-wp_refine_input_last=False
+wp_refine='gru' # gru, linear, None
+wp_refine_input_last=True
 
 gru_use_box=3
 velo_update=False

@@ -190,7 +190,8 @@ class CustomNuScenesDataset(Custom3DDataset):
         if self.debug: # TODO
             # import pdb;pdb.set_trace()
             # data_infos = data_infos[1185:1195]
-            data_infos = [data_infos[i] for i in [20,30,40,50,100,500,700,800,900,1200,1190]]
+            # data_infos = [data_infos[i] for i in [20,30,40,50,100,500,700,800,900,1200,1190]]
+            data_infos = data_infos[1185:1300]
         elif self.in_test:
             # data_infos = data_infos[:5]
             data_infos = data_infos[0:1210]
@@ -336,8 +337,8 @@ class CustomNuScenesDataset(Custom3DDataset):
         
         gt_pl_lack = pl_box_idxs==-1
         
-        if gt_pl_lack.sum() > 0:
-            import pdb;pdb.set_trace()
+        # if gt_pl_lack.sum() > 0:
+        #     import pdb;pdb.set_trace()
         
         # import pdb;pdb.set_trace()
         # gt_idxs: [1501, 1510, 1549, 1600, 1603, 1674, 1706, 1716, 1732, 1736]

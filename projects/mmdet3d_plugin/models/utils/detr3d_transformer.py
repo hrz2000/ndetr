@@ -48,8 +48,12 @@ class Detr3DTransformer(BaseModule):
         self.use_wp_query = use_wp_query
         self.use_bev_query = use_bev_query
         self.use_route_query = use_route_query
-        self.use_route_query2 = use_route_query2
-        self.extra_query = int(self.use_wp_query) + int(self.use_bev_query) + int(self.use_route_query) + int(self.use_route_query2)
+        self.use_route_query2 = use_route_query2 # TODO
+        self.extra_query = 1
+        if self.use_bev_query:
+            self.extra_query += 1
+        if self.use_route_query:
+            self.extra_query += 1
         
         self.route_num_attributes = route_num_attributes
         self.use_type_emb = use_type_emb
@@ -137,21 +141,34 @@ class Detr3DTransformer(BaseModule):
             query = query + self.obj_type_emb.weight
 
         if self.use_bev_query:
-            bev_batch = np.stack([t['hdmap'] for t in img_metas])
-            bev_batch = query.new_tensor(bev_batch)
-            bev_batch = F.interpolate(
-                bev_batch, size=(self.bev_down_size, self.bev_down_size), mode='bilinear', align_corners=False).flatten(1) 
-            bev_emb = self.bev_emb(bev_batch)  # 2*18*18->256d
+            if self.use_bev_query != 'no':
+                # import pdb;pdb.set_trace()
+                bev_batch = np.stack([t['hdmap'] for t in img_metas])
+                bev_batch = query.new_tensor(bev_batch)
+                bev_batch = F.interpolate(
+                    bev_batch, size=(self.bev_down_size, self.bev_down_size), mode='bilinear', align_corners=False).flatten(1) 
+                bev_emb = self.bev_emb(bev_batch)  # 2*18*18->256d
+            else:
+                bs = len(img_metas)
+                bev_emb = query.new_tensor(np.random.randn(bs, 512))  # 2*18*18->256d
+                
             bev_pos, bev_emb = torch.split(bev_emb, self.embed_dims , dim=-1)
             if self.use_type_emb:
                 bev_emb = bev_emb + self.bev_type_emb.weight
+
             query_pos = torch.cat([bev_pos.unsqueeze(1), query_pos],dim=1)
             query = torch.cat([bev_emb.unsqueeze(1), query],dim=1)
         
         if self.use_route_query:
-            route_batch = np.stack([t['plan']['route'][0] for t in img_metas]) # bs,6
-            route_batch = query.new_tensor(route_batch)
-            route_emb = self.route_emb(route_batch)
+            if self.use_route_query != 'no':
+                # import pdb;pdb.set_trace()
+                route_batch = np.stack([t['plan']['route'][0] for t in img_metas]) # bs,6
+                route_batch = query.new_tensor(route_batch)
+                route_emb = self.route_emb(route_batch)
+            else:
+                bs = len(img_metas)
+                route_emb = query.new_tensor(np.random.randn(bs, 512))  # 2*18*18->256d
+                
             route_pos, route_emb = torch.split(route_emb, self.embed_dims , dim=-1)
             if self.use_type_emb:
                 route_emb = route_emb + self.route_type_emb.weight
