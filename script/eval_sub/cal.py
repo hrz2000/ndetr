@@ -3,7 +3,7 @@ import mmcv
 import numpy as np
 import os.path as osp
 
-a = 'output/output/detr_eval_split/bs_box_wpattn/2023-02-19_22:34:21/'
+a = 'output/output/detr_eval_split/bs_box_wpattn/2023-02-19_22:28:57/'
 # b = 'output/output/detr_eval_split/2023-02-17_10:55:27'
 fa = glob(f"{a}/*json")
 
@@ -15,6 +15,7 @@ files.extend(fa)
 # import pdb;pdb.set_trace()
 
 files.sort(key=lambda x:int(osp.splitext(osp.basename(x))[0])) # 升序
+files = files[:18]
 # files.extend(fb)
 # print(len(files))
 

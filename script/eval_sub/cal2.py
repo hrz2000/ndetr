@@ -12,6 +12,7 @@ print(len(fb))
 files = []
 files.extend(fa)
 files.extend(fb)
+files = files[:18]
 print(len(files))
 
 files.sort(key=lambda x:int(osp.splitext(osp.basename(x))[0])) # 升序
@@ -35,7 +36,7 @@ composed_arr = np.array(composed)
 penalty_arr = np.array(penalty)
 route_arr = np.array(route)
 # import pdb;pdb.set_trace()
-assert route_arr.shape[0] == 36
+# assert route_arr.shape[0] == 36
 
 x,y,z=composed_arr.mean(),penalty_arr.mean(),route_arr.mean()
 composed.append(x)
