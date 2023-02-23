@@ -806,6 +806,7 @@ class Detr3DHead(DETRHead):
         
         # 仿真的时候就不要再计算loss了
         if self.loss_weights.loss_attnmap != 0:
+            loss_attnmap_list = []
             # inter_attnmap = outs['inter_attnmap'] # torch.Size([32, 6, 8, 53, 53])
             for batch_id in range(len(inter_attnmap)):
                 if 'attn_info' not in img_metas[batch_id]: # 仿真
@@ -857,36 +858,34 @@ class Detr3DHead(DETRHead):
                     pred_attnmap_filter = pred_attnmap_filter[:,:,0:1,:]
                     # 只拿出cls_emb对其他的weights
 
-                gt_attnmap_filter_sum1 = gt_attnmap_filter.sum(-1)
-                gt_attnmap_filter_sum1 += 0.00001
-                gt_attnmap_filter = (gt_attnmap_filter / gt_attnmap_filter_sum1[...,None]) # .clamp(0.00001,1)
-                
-                pred_attnmap_filter_sum1 = pred_attnmap_filter.sum(-1) # 感觉是因为这个值太小导致的
-                pred_attnmap_filter_sum1 += 0.00001
-                pred_attnmap_filter = (pred_attnmap_filter / pred_attnmap_filter_sum1[...,None]) # 这样又不是
-                # torch.Size([1, 8, 11, 11])
-                
-                
+                if self.use_kl or self.use_focal:
+                    pass
+                else:
+                    gt_attnmap_filter_sum1 = gt_attnmap_filter.sum(-1)
+                    gt_attnmap_filter_sum1 += 0.00001
+                    gt_attnmap_filter = (gt_attnmap_filter / gt_attnmap_filter_sum1[...,None]) # .clamp(0.00001,1)
+                    
+                    pred_attnmap_filter_sum1 = pred_attnmap_filter.sum(-1) # 感觉是因为这个值太小导致的
+                    pred_attnmap_filter_sum1 += 0.00001
+                    pred_attnmap_filter = (pred_attnmap_filter / pred_attnmap_filter_sum1[...,None]) # 这样又不是
+                    # torch.Size([1, 8, 11, 11])
                 
                 # isnotnan = torch.logical_and(torch.isfinite(pred_attnmap_filter), torch.isfinite(gt_attnmap_filter)) # 应该不会有作用，因为我使用了clamp, torch.Size([1, 8, 15, 15])
-                
                 # import pdb;pdb.set_trace()
-                
                 # loss_attnmap = F.l1_loss(gt_attnmap_filter[isnotnan], pred_attnmap_filter[isnotnan]) # layer层面
                 # import pdb;pdb.set_trace()
                 n_pred_layer = pred_attnmap_filter.shape[0] # torch.Size([1, 8, 3, 3])
                 gt_attnmap_filter = gt_attnmap_filter.repeat(n_pred_layer,1,1,1)
                 if self.use_kl:
-                    # kl_loss = nn.KLDivLoss(reduction="batchmean")
-                    # input should be a distribution in the log space
-                    # kl_input = F.log_softmax(torch.randn(3, 5, requires_grad=True), dim=1)
-                    # Sample a batch of distributions. Usually this would come from the dataset
-                    # target = F.softmax(torch.rand(3, 5), dim=1)
-                    # output = kl_loss(pred_attnmap_filter, gt_attnmap_filter)
-
+                    # kl_loss = nn.KLDivLoss(log_target=False)
+                    # log_target = F.softmax(gt_attnmap_filter, dim=-1)
+                    # log_pred = F.log_softmax(pred_attnmap_filter, dim=-1)
+                    # loss_attnmap = kl_loss(log_pred, log_target)
+                    
                     kl_loss = nn.KLDivLoss(log_target=True)
-                    log_target = F.log_softmax(torch.rand(3, 5), dim=1)
-                    loss_attnmap = kl_loss(pred_attnmap_filter, gt_attnmap_filter)
+                    log_target = F.log_softmax(gt_attnmap_filter, dim=-1)
+                    log_pred = F.log_softmax(pred_attnmap_filter, dim=-1)
+                    loss_attnmap = kl_loss(log_pred, log_target)
                 elif self.use_focal:
                     loss_attnmap = sigmoid_focal_loss(pred_attnmap_filter, gt_attnmap_filter)
                 elif self.use_mmd:
@@ -902,8 +901,10 @@ class Detr3DHead(DETRHead):
                     import pdb;pdb.set_trace()
                     
                 loss_attnmap = torch.nan_to_num(loss_attnmap) ## TODO
+                loss_attnmap_list.append(loss_attnmap)
                 # self.loss_update(losses, loss_attnmap, 'attnmap')
-                losses.update({'attnmap_loss': loss_attnmap*self.loss_weights.loss_attnmap})
+            loss_attnmap = torch.stack(loss_attnmap_list).mean()
+            losses.update({'attnmap_loss': loss_attnmap*self.loss_weights.loss_attnmap})
                 
         return losses, new_gt_idxs_list_layers
     
@@ -1195,7 +1196,7 @@ def mmd_rbf(source, target, kernel_mul=2.0, kernel_num=5, fix_sigma=None):
 
 # plt.show()
 
-def sigmoid_focal_loss(inputs, targets, num_masks, alpha: float = 0.25, gamma: float = 2):
+def sigmoid_focal_loss(inputs, targets, num_masks=None, alpha: float = 0.25, gamma: float = 2):
     """
     Loss used in RetinaNet for dense detection: https://arxiv.org/abs/1708.02002.
     Args:
@@ -1220,4 +1221,7 @@ def sigmoid_focal_loss(inputs, targets, num_masks, alpha: float = 0.25, gamma: f
         alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
         loss = alpha_t * loss
 
-    return loss.mean(1).sum() / num_masks
+    if num_masks is None:
+        return loss.mean(1).sum()
+    else:
+        return loss.mean(1).sum() / num_masks
