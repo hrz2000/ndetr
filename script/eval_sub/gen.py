@@ -14,8 +14,8 @@ timeout=60000
 unblock=False
 repetitions=1
 
-config="projects/configs/detr3d/new/bs_box_wpattn_filter.py"
-checkpoint='work_dirs/bs_box_wpattn_filter/2023-02-21_12:01:41/epoch_18.pth'
+config="projects/configs/detr3d/new/bs_box_wpattn_mmd.py"
+checkpoint='work_dirs/bs_box_wpattn_mmd/2023-02-22_10:25:33/epoch_18.pth'
 name = osp.splitext(osp.basename(config))[0]
 save_path='output/output/detr_eval_split' + f"/{name}/" + time.strftime('%Y-%m-%d_%H:%M:%S')
 

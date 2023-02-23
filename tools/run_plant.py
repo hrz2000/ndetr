@@ -5,7 +5,7 @@ import os.path as osp
 gpus=1
 debug=False
 # data_dir='output/plant_datagen/PlanT_data_1'
-# data_dir='output/plant_datagen2/PlanT_data_1'
+data_dir='output/plant_datagen2/PlanT_data_1'
 data_dir='output/datagen_l6'
 load_from='checkpoints/PlanT/3x/PlanT_medium/checkpoints/epoch\\=047.ckpt' # 没有的话会忽略,因为特殊字符的问题加载命令行里面会报错
 
