@@ -268,8 +268,12 @@ class Detr3DHead(DETRHead):
                 use_all_map = True,
                 use_l2 = False,
                 use_mmd = False,
+                use_focal = False,
+                use_kl = False,
                  **kwargs
                  ):
+        self.use_kl = use_kl
+        self.use_focal = use_focal
         self.use_mmd = use_mmd
         self.use_l2 = use_l2
         self.use_all_map = use_all_map
@@ -872,7 +876,20 @@ class Detr3DHead(DETRHead):
                 # import pdb;pdb.set_trace()
                 n_pred_layer = pred_attnmap_filter.shape[0] # torch.Size([1, 8, 3, 3])
                 gt_attnmap_filter = gt_attnmap_filter.repeat(n_pred_layer,1,1,1)
-                if self.use_mmd:
+                if self.use_kl:
+                    # kl_loss = nn.KLDivLoss(reduction="batchmean")
+                    # input should be a distribution in the log space
+                    # kl_input = F.log_softmax(torch.randn(3, 5, requires_grad=True), dim=1)
+                    # Sample a batch of distributions. Usually this would come from the dataset
+                    # target = F.softmax(torch.rand(3, 5), dim=1)
+                    # output = kl_loss(pred_attnmap_filter, gt_attnmap_filter)
+
+                    kl_loss = nn.KLDivLoss(log_target=True)
+                    log_target = F.log_softmax(torch.rand(3, 5), dim=1)
+                    loss_attnmap = kl_loss(pred_attnmap_filter, gt_attnmap_filter)
+                elif self.use_focal:
+                    loss_attnmap = sigmoid_focal_loss(pred_attnmap_filter, gt_attnmap_filter)
+                elif self.use_mmd:
                     gt_attnmap_filter = einops.rearrange(gt_attnmap_filter, "layers heads num_sup n_elem->(layers heads num_sup) n_elem")
                     pred_attnmap_filter = einops.rearrange(pred_attnmap_filter, "layers heads num_sup n_elem->(layers heads num_sup) n_elem")
                     loss_attnmap = mmd_rbf(gt_attnmap_filter, pred_attnmap_filter)
@@ -1177,3 +1194,30 @@ def mmd_rbf(source, target, kernel_mul=2.0, kernel_num=5, fix_sigma=None):
 # plt.hist(res2, buckets)
 
 # plt.show()
+
+def sigmoid_focal_loss(inputs, targets, num_masks, alpha: float = 0.25, gamma: float = 2):
+    """
+    Loss used in RetinaNet for dense detection: https://arxiv.org/abs/1708.02002.
+    Args:
+        inputs: A float tensor of arbitrary shape.
+                The predictions for each example.
+        targets: A float tensor with the same shape as inputs. Stores the binary
+                 classification label for each element in inputs
+                (0 for the negative class and 1 for the positive class).
+        alpha: (optional) Weighting factor in range (0,1) to balance
+                positive vs negative examples. Default = -1 (no weighting).
+        gamma: Exponent of the modulating factor (1 - p_t) to
+               balance easy vs hard examples.
+    Returns:
+        Loss tensor
+    """
+    prob = inputs.sigmoid()
+    ce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none")
+    p_t = prob * targets + (1 - prob) * (1 - targets)
+    loss = ce_loss * ((1 - p_t) ** gamma)
+
+    if alpha >= 0:
+        alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
+        loss = alpha_t * loss
+
+    return loss.mean(1).sum() / num_masks

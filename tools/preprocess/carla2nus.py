@@ -58,7 +58,7 @@ def main(cfg):
     
     for k,dataset in [('val',val_set), ('train',train_set)]:
         if dataset_type=='all':
-            name = f'data/carla_{k}_hdmap_all_filter.pkl'
+            name = f'data/carla_{k}_hdmap_all.pkl'
         elif dataset_type=='2all':
             name = f'data/carla_{k}_hdmap_2all_filter.pkl'
         else:
@@ -87,10 +87,10 @@ def load_dataset(k, dataset, intri, sensor2vl_r, sensor2vl_t, name):
         # array(['car', 'pedestrian'], dtype='<U10')
         gt_names = classes[gt_labels]
         
-        fv = item['img_metas']['img_filename']
-        if fv in filter_all:
-            print('skip one')
-            continue
+        # fv = item['img_metas']['img_filename']
+        # if fv in filter_all:
+        #     print('skip one')
+        #     continue
 
         item = dict(
             lidar_path = None,

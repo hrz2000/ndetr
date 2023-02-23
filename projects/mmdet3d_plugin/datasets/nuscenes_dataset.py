@@ -227,9 +227,8 @@ class CustomNuScenesDataset(Custom3DDataset):
 
         plan=info['plan']
         fv_path = image_paths[0]
-        topdown_path = fv_path.replace('rgb','topdown')
-        if on_cc:
-            topdown_path = rel2s3(topdown_path)
+        topdown_path = fv_path.replace('rgb','topdown') # 's3://tr_plan_hrz/PlanT_data_1/int_l_s8_dataset/Routes_Town02_Scenario8/Town02_Scenario8_route11_12_27_21_51_10/topdown/0005.png'
+        # import pdb;pdb.set_trace()
         topdown = mmcv.imread(topdown_path)
 
         hdmap = np.stack([
@@ -237,6 +236,7 @@ class CustomNuScenesDataset(Custom3DDataset):
             mmcv.imread(fv_path.replace('rgb','hdmap1'),'grayscale')], axis=0) # 其实保存的时候用pkl会更好一些
             
         attnmap_path = fv_path.replace('rgb', 'attnmap').replace('png','pkl')
+        # import pdb;pdb.set_trace()
         attn_info = mmcv.load(attnmap_path, file_format='pkl') # dict_keys(['attn_map', 'input_idx', 'output_idx', 'output_disappear', 'output_label_path'])
             
         ann_info = None
@@ -1078,8 +1078,8 @@ def convert(box, rt_mat=None, with_yaw=True):
     return LiDARInstance3DBoxes(arr, box_dim=arr.size(-1), with_yaw=with_yaw)
 
 def rel2s3(string):
-    if string.startswith('output/PlanT_data_1'):
-        return f"s3://tr_plan_hrz/{'/'.join(string.split('/')[1:])}"
-    elif string.startswith('output/PlanT_val_1/coke_s3_dataset/Routes_l6_dataset'):
-        return f"s3://tr_plan_hrz/l6_dataset/Routes_l6_dataset/{'/'.join(string.split('/')[4:])}"
-    return f"s3://tr_plan_hrz/{'/'.join(string.split('/')[2:])}"
+    # if string.startswith('output/PlanT_data_1'):
+    #     return f"s3://tr_plan_hrz/{'/'.join(string.split('/')[1:])}"
+    # elif string.startswith('output/PlanT_val_1/coke_s3_dataset/Routes_l6_dataset'):
+    #     return f"s3://tr_plan_hrz/l6_dataset/Routes_l6_dataset/{'/'.join(string.split('/')[4:])}"
+    return f"s3://tr_plan_hrz_2/{'/'.join(string.split('/')[1:])}"

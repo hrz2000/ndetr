@@ -14,7 +14,7 @@ PY_ARGS=${@:4}
 
 PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
 srun -p shlab-perceptionx-s2 \
-    --quotatype=spot \
+    --quotatype=auto \
     --mpi=pmi2 \
     --job-name=${job_name} \
     --gres=gpu:${GPUS_PER_NODE} \
