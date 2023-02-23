@@ -5,7 +5,7 @@ use_all_map=False
 use_gt_light=False
 use_det_metric=False
 loss_weights=dict(
-    loss_attnmap=10
+    loss_attnmap=1
 )
 
 batch=32
