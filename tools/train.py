@@ -194,6 +194,8 @@ def main():
         # re-set gpu_ids with distributed training mode
         _, world_size = get_dist_info()
         cfg.gpu_ids = range(world_size)
+        
+    print("a")
 
     # create work_dir
     mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
@@ -230,6 +232,7 @@ def main():
     meta['seed'] = seed
     meta['exp_name'] = osp.basename(args.config)
 
+    print("b")
     model = build_detector(
         cfg.model,
         train_cfg=cfg.get('train_cfg'),
@@ -241,6 +244,8 @@ def main():
 
     datasets = [build_dataset(cfg.data.train)]
     datasets[0][0]
+    print("c")
+    
     if len(cfg.workflow) == 2:
         assert 'val' in [mode for (mode, _) in cfg.workflow]
         val_dataset = copy.deepcopy(cfg.data.val)
