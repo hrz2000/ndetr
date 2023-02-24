@@ -195,7 +195,7 @@ def create_fut_bev(pred_pts_bbox, gt_pts_bbox, only_box_for_col_det=None, PIXELS
                 fill_c = 'royalblue'
                 draw.line((endx1, endy1, endx2, endy2), fill=fill_c, width=1)
                 
-    return np.array(img)[...,::-1]
+    return np.array(img)[...,::-1] # 保存的结果是rgb
 
 def create_collide_bev(pred_pts_bbox, gt_pts_bbox, only_box_for_col_det=None, PIXELS_PER_METER = 5, size = (300,300)):
     img_box = Image.new('L', size)
