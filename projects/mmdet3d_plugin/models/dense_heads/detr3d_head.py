@@ -806,7 +806,7 @@ class Detr3DHead(DETRHead):
         
         # 仿真的时候就不要再计算loss了
         if self.loss_weights.loss_attnmap != 0:
-            if 'attn_info' in img_metas[batch_id]:
+            if 'attn_info' in img_metas[0]:
                 loss_attnmap_list = []
                 # inter_attnmap = outs['inter_attnmap'] # torch.Size([32, 6, 8, 53, 53])
                 for batch_id in range(len(inter_attnmap)):

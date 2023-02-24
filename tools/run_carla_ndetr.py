@@ -12,9 +12,9 @@ experiments='debug' # 需要设置datagen=0
 # experiments='xxx'
 is_ndetr = not ('PlanT' in experiments or experiments=='datagen')
 if is_ndetr:
-    config="projects/configs/detr3d/new/bs_box.py"
+    config="projects/configs/detr3d/new/bs_box_wpattn_new.py"
     # checkpoint="work_dirs/bs_box/2023-02-15_21:51:35/epoch_18.pth"
-    checkpoint='pretrain/route.pth'
+    checkpoint='pretrain/new.pth'
 else:
     config=experiments+'.py'
     checkpoint='no.pth'
