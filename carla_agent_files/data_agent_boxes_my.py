@@ -215,7 +215,7 @@ class DataAgent(AutoPilot):
             boxes = get_bev_boxes(self)
             if self.cfg.SAVE_SENSORS:
                 rgb_front = []
-                rgb_front.append(cv2.cvtColor(input_data['rgb_front'][1][:, :, :3], cv2.COLOR_BGR2RGB))
+                rgb_front.append(cv2.cvtColor(input_data['rgb_front'][1][:, :, :3], cv2.COLOR_BGR2RGB)) ## TODO
                 rgb_front = np.concatenate(rgb_front, axis=1)
 
                 rgb_left = []

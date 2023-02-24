@@ -1146,7 +1146,7 @@ def get_input_batch_plant(label_raw, input_data):
     return input_batch, gt_result, data_route, command, obj_idxs
 
 def get_batch_inp_ndetr(self, label_raw, input_data):
-    img = input_data['rgb_front'] # (256, 900, 3) # TODO 改成多相机
+    img = input_data['rgb_front'][...,::-1] # (256, 900, 3) # TODO 改成多相机, TODO bugfix
     img_shape = img.shape[:2]
     img = torch.tensor(img.transpose(2,0,1)[None,None,...]) # bs,cam,h,w,3
     

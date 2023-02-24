@@ -241,10 +241,12 @@ def main():
 
     datasets = [build_dataset(cfg.data.train)]
     datasets[0][0]#dict_keys(['img_metas', 'gt_bboxes_3d', 'gt_labels_3d', 'img'])
-    from tqdm import tqdm
-    for item in tqdm(datasets[0]):
-        if len(item['gt_labels_3d']) != len(item['img_metas'].data['gt_idxs']):
-            import pdb;pdb.set_trace()
+    
+    import pdb;pdb.set_trace()
+    # from tqdm import tqdm
+    # for item in tqdm(datasets[0]):
+    #     if len(item['gt_labels_3d']) != len(item['img_metas'].data['gt_idxs']):
+    #         import pdb;pdb.set_trace()
     # if len(cfg.workflow) == 2:
     #     assert 'val' in [mode for (mode, _) in cfg.workflow]
     #     val_dataset = copy.deepcopy(cfg.data.val)
