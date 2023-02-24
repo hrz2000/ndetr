@@ -1,11 +1,11 @@
 _base_ = ['../../../../mmdetection3d/configs/_base_/datasets/nus-3d.py']
 from projects.configs.detr3d.new.common import *
 
-find_unused_parameters=True
+use_all_map=False
 use_gt_light=False
 use_det_metric=False
 loss_weights=dict(
-    loss_attnmap=0
+    loss_attnmap=10
 )
 
 batch=32
@@ -62,6 +62,7 @@ model = dict(
         relu_before_extra_convs=True),
     pts_bbox_head=dict(
         type='Detr3DHead',
+        use_all_map=use_all_map,
         use_gt_light=use_gt_light,
         loss_weights=loss_weights,
         num_query=num_query,
@@ -81,9 +82,8 @@ model = dict(
         transformer=dict(
             type='Detr3DTransformer',
             use_wp_query = True,
-            use_bev_query = 'no',
-            use_route_query = 'no',
-            use_route_query2 = False,
+            use_bev_query = True,
+            use_route_query = True,
             route_num_attributes = 6,
             use_type_emb = True,
             wp_refine = wp_refine,
@@ -275,7 +275,7 @@ lr_config = dict(
     warmup_ratio=1.0 / 3,
     min_lr_ratio=1e-3)
 total_epochs = 18
-evaluation = dict(interval=3, pipeline=test_pipeline, save_best="wp", less_keys=['wp'], gpu_collect=True)
+evaluation = dict(interval=3, pipeline=test_pipeline, save_best="wp", less_keys=['wp'])
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 # load_from='pretrain/route.pth'
