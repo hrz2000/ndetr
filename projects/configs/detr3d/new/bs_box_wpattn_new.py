@@ -275,7 +275,7 @@ lr_config = dict(
     warmup_ratio=1.0 / 3,
     min_lr_ratio=1e-3)
 total_epochs = 18
-evaluation = dict(interval=3, pipeline=test_pipeline, save_best="wp", less_keys=['wp'])
+evaluation = dict(interval=3, pipeline=test_pipeline, save_best="wp", less_keys=['wp'], gpu_collect=True)
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 # load_from='pretrain/route.pth'
