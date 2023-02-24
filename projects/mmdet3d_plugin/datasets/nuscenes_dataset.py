@@ -190,8 +190,8 @@ class CustomNuScenesDataset(Custom3DDataset):
         if self.debug: # TODO
             # import pdb;pdb.set_trace()
             # data_infos = data_infos[1185:1195]
-            # data_infos = [data_infos[i] for i in [20,30,40,50,100,500,700,800,900,1200,1190]]
-            data_infos = data_infos[1185:1300]
+            data_infos = [data_infos[i] for i in [20,30,40,50,100,500,700,800,900,1200,1190]]
+            # data_infos = data_infos[1185:1300]
         elif self.in_test:
             # data_infos = data_infos[:5]
             data_infos = data_infos[0:1210]
