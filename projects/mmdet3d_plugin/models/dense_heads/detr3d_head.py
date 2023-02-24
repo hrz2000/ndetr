@@ -806,105 +806,104 @@ class Detr3DHead(DETRHead):
         
         # 仿真的时候就不要再计算loss了
         if self.loss_weights.loss_attnmap != 0:
-            loss_attnmap_list = []
-            # inter_attnmap = outs['inter_attnmap'] # torch.Size([32, 6, 8, 53, 53])
-            for batch_id in range(len(inter_attnmap)):
-                if 'attn_info' not in img_metas[batch_id]: # 仿真
-                    break
-                
-                last_layer_batchi_gt = new_gt_idxs_list_layers[-1][batch_id].to(torch.int) # 每个gt对应着那些位置也是需要明确的
-                gt_idxs = gt_idxs_list[batch_id]
-                attnmap = inter_attnmap[batch_id] # torch.Size([6, 8, 53, 53])
-                # import pdb;pdb.set_trace()
-                
-                gt_attnmap = attnmap.new_tensor(img_metas[batch_id]['attnmap'])
-                assert gt_attnmap.shape[-1] == 1 + len(gt_idxs) + 1
-                
-                sorted_idxs = []
-                for idx in gt_idxs:
-                    pred_idx = torch.where(last_layer_batchi_gt==idx)[0]
-                    if pred_idx.shape[0] == 0:
-                        assert False
+            if 'attn_info' in img_metas[batch_id]:
+                loss_attnmap_list = []
+                # inter_attnmap = outs['inter_attnmap'] # torch.Size([32, 6, 8, 53, 53])
+                for batch_id in range(len(inter_attnmap)):
+                    
+                    last_layer_batchi_gt = new_gt_idxs_list_layers[-1][batch_id].to(torch.int) # 每个gt对应着那些位置也是需要明确的
+                    gt_idxs = gt_idxs_list[batch_id]
+                    attnmap = inter_attnmap[batch_id] # torch.Size([6, 8, 53, 53])
+                    # import pdb;pdb.set_trace()
+                    
+                    gt_attnmap = attnmap.new_tensor(img_metas[batch_id]['attnmap'])
+                    assert gt_attnmap.shape[-1] == 1 + len(gt_idxs) + 1
+                    
+                    sorted_idxs = []
+                    for idx in gt_idxs:
+                        pred_idx = torch.where(last_layer_batchi_gt==idx)[0]
+                        if pred_idx.shape[0] == 0:
+                            assert False
+                        else:
+                            pred_idx = pred_idx.item()
+                            sorted_idxs.append(pred_idx+3) # 前面有wp_emb, TODO: 这里需要假定extra_query为3
+                    sorted_idxs = [self.wp_query_pos, *sorted_idxs, self.route_query_pos]
+                    new_map = attnmap[:,:,sorted_idxs][:,:,:,sorted_idxs] # torch.Size([6, 8, 12, 12])
+                    
+                    # 只要最后一层
+                    gt_attnmap = gt_attnmap[-1:]
+                    new_map = new_map[-1:]
+                    # gt_attnmap = gt_attnmap[-1:]
+                    # new_map = new_map[:]
+                    
+                    gt_pl_lack = img_metas[batch_id]['gt_pl_lack']
+                    gt_pl_have = np.array(gt_pl_lack) == False
+                    
+                    gt_attnmap_filter = gt_attnmap[:,:,gt_pl_have][:,:,:,gt_pl_have]
+                    pred_attnmap_filter = new_map[:,:,gt_pl_have][:,:,:,gt_pl_have]
+                    # pred对应没有的也不监督
+                    
+                    # 只监督最后一层可以吗？
+                    # 我的gt_attnmap已经和gt_idxs对齐了，除了前面1个cls_emb，后面一个route
+                    # 所以只需要对预测的map进行调整，拿出cls_emb，obj，route_emb
+                    
+                    # use_all_map = False
+                    if self.use_all_map:
+                        # assert False
+                        pass
+                        # 需要调整后面对帧的监督
                     else:
-                        pred_idx = pred_idx.item()
-                        sorted_idxs.append(pred_idx+3) # 前面有wp_emb, TODO: 这里需要假定extra_query为3
-                sorted_idxs = [self.wp_query_pos, *sorted_idxs, self.route_query_pos]
-                new_map = attnmap[:,:,sorted_idxs][:,:,:,sorted_idxs] # torch.Size([6, 8, 12, 12])
-                
-                # 只要最后一层
-                gt_attnmap = gt_attnmap[-1:]
-                new_map = new_map[-1:]
-                # gt_attnmap = gt_attnmap[-1:]
-                # new_map = new_map[:]
-                
-                gt_pl_lack = img_metas[batch_id]['gt_pl_lack']
-                gt_pl_have = np.array(gt_pl_lack) == False
-                
-                gt_attnmap_filter = gt_attnmap[:,:,gt_pl_have][:,:,:,gt_pl_have]
-                pred_attnmap_filter = new_map[:,:,gt_pl_have][:,:,:,gt_pl_have]
-                # pred对应没有的也不监督
-                
-                # 只监督最后一层可以吗？
-                # 我的gt_attnmap已经和gt_idxs对齐了，除了前面1个cls_emb，后面一个route
-                # 所以只需要对预测的map进行调整，拿出cls_emb，obj，route_emb
-                
-                # use_all_map = False
-                if self.use_all_map:
-                    # assert False
-                    pass
-                    # 需要调整后面对帧的监督
-                else:
-                    gt_attnmap_filter = gt_attnmap_filter[:,:,0:1,:]
-                    pred_attnmap_filter = pred_attnmap_filter[:,:,0:1,:]
-                    # 只拿出cls_emb对其他的weights
+                        gt_attnmap_filter = gt_attnmap_filter[:,:,0:1,:]
+                        pred_attnmap_filter = pred_attnmap_filter[:,:,0:1,:]
+                        # 只拿出cls_emb对其他的weights
 
-                if self.use_kl or self.use_focal:
-                    pass
-                else:
-                    gt_attnmap_filter_sum1 = gt_attnmap_filter.sum(-1)
-                    gt_attnmap_filter_sum1 += 0.00001
-                    gt_attnmap_filter = (gt_attnmap_filter / gt_attnmap_filter_sum1[...,None]) # .clamp(0.00001,1)
-                    
-                    pred_attnmap_filter_sum1 = pred_attnmap_filter.sum(-1) # 感觉是因为这个值太小导致的
-                    pred_attnmap_filter_sum1 += 0.00001
-                    pred_attnmap_filter = (pred_attnmap_filter / pred_attnmap_filter_sum1[...,None]) # 这样又不是
-                    # torch.Size([1, 8, 11, 11])
-                
-                # isnotnan = torch.logical_and(torch.isfinite(pred_attnmap_filter), torch.isfinite(gt_attnmap_filter)) # 应该不会有作用，因为我使用了clamp, torch.Size([1, 8, 15, 15])
-                # import pdb;pdb.set_trace()
-                # loss_attnmap = F.l1_loss(gt_attnmap_filter[isnotnan], pred_attnmap_filter[isnotnan]) # layer层面
-                # import pdb;pdb.set_trace()
-                n_pred_layer = pred_attnmap_filter.shape[0] # torch.Size([1, 8, 3, 3])
-                gt_attnmap_filter = gt_attnmap_filter.repeat(n_pred_layer,1,1,1)
-                if self.use_kl:
-                    # kl_loss = nn.KLDivLoss(log_target=False)
-                    # log_target = F.softmax(gt_attnmap_filter, dim=-1)
-                    # log_pred = F.log_softmax(pred_attnmap_filter, dim=-1)
-                    # loss_attnmap = kl_loss(log_pred, log_target)
-                    
-                    kl_loss = nn.KLDivLoss(log_target=True)
-                    log_target = F.log_softmax(gt_attnmap_filter, dim=-1)
-                    log_pred = F.log_softmax(pred_attnmap_filter, dim=-1)
-                    loss_attnmap = kl_loss(log_pred, log_target)
-                elif self.use_focal:
-                    loss_attnmap = sigmoid_focal_loss(pred_attnmap_filter, gt_attnmap_filter)
-                elif self.use_mmd:
-                    gt_attnmap_filter = einops.rearrange(gt_attnmap_filter, "layers heads num_sup n_elem->(layers heads num_sup) n_elem")
-                    pred_attnmap_filter = einops.rearrange(pred_attnmap_filter, "layers heads num_sup n_elem->(layers heads num_sup) n_elem")
-                    loss_attnmap = mmd_rbf(gt_attnmap_filter, pred_attnmap_filter)
-                elif self.use_l2:
-                    loss_attnmap = F.mse_loss(gt_attnmap_filter, pred_attnmap_filter) # layer层面
-                else:
-                    loss_attnmap = F.l1_loss(gt_attnmap_filter, pred_attnmap_filter) # layer层面
+                    if self.use_kl or self.use_focal:
+                        pass
+                    else:
+                        gt_attnmap_filter_sum1 = gt_attnmap_filter.sum(-1)
+                        gt_attnmap_filter_sum1 += 0.00001
+                        gt_attnmap_filter = (gt_attnmap_filter / gt_attnmap_filter_sum1[...,None]) # .clamp(0.00001,1)
                         
-                if torch.isnan(loss_attnmap): ## 遇到了nan，发现是因为isnotnan全是false，学成了这样
-                    import pdb;pdb.set_trace()
+                        pred_attnmap_filter_sum1 = pred_attnmap_filter.sum(-1) # 感觉是因为这个值太小导致的
+                        pred_attnmap_filter_sum1 += 0.00001
+                        pred_attnmap_filter = (pred_attnmap_filter / pred_attnmap_filter_sum1[...,None]) # 这样又不是
+                        # torch.Size([1, 8, 11, 11])
                     
-                loss_attnmap = torch.nan_to_num(loss_attnmap) ## TODO
-                loss_attnmap_list.append(loss_attnmap)
-                # self.loss_update(losses, loss_attnmap, 'attnmap')
-            loss_attnmap = torch.stack(loss_attnmap_list).mean()
-            losses.update({'attnmap_loss': loss_attnmap*self.loss_weights.loss_attnmap})
+                    # isnotnan = torch.logical_and(torch.isfinite(pred_attnmap_filter), torch.isfinite(gt_attnmap_filter)) # 应该不会有作用，因为我使用了clamp, torch.Size([1, 8, 15, 15])
+                    # import pdb;pdb.set_trace()
+                    # loss_attnmap = F.l1_loss(gt_attnmap_filter[isnotnan], pred_attnmap_filter[isnotnan]) # layer层面
+                    # import pdb;pdb.set_trace()
+                    n_pred_layer = pred_attnmap_filter.shape[0] # torch.Size([1, 8, 3, 3])
+                    gt_attnmap_filter = gt_attnmap_filter.repeat(n_pred_layer,1,1,1)
+                    if self.use_kl:
+                        # kl_loss = nn.KLDivLoss(log_target=False)
+                        # log_target = F.softmax(gt_attnmap_filter, dim=-1)
+                        # log_pred = F.log_softmax(pred_attnmap_filter, dim=-1)
+                        # loss_attnmap = kl_loss(log_pred, log_target)
+                        
+                        kl_loss = nn.KLDivLoss(log_target=True)
+                        log_target = F.log_softmax(gt_attnmap_filter, dim=-1)
+                        log_pred = F.log_softmax(pred_attnmap_filter, dim=-1)
+                        loss_attnmap = kl_loss(log_pred, log_target)
+                    elif self.use_focal:
+                        loss_attnmap = sigmoid_focal_loss(pred_attnmap_filter, gt_attnmap_filter)
+                    elif self.use_mmd:
+                        gt_attnmap_filter = einops.rearrange(gt_attnmap_filter, "layers heads num_sup n_elem->(layers heads num_sup) n_elem")
+                        pred_attnmap_filter = einops.rearrange(pred_attnmap_filter, "layers heads num_sup n_elem->(layers heads num_sup) n_elem")
+                        loss_attnmap = mmd_rbf(gt_attnmap_filter, pred_attnmap_filter)
+                    elif self.use_l2:
+                        loss_attnmap = F.mse_loss(gt_attnmap_filter, pred_attnmap_filter) # layer层面
+                    else:
+                        loss_attnmap = F.l1_loss(gt_attnmap_filter, pred_attnmap_filter) # layer层面
+                            
+                    if torch.isnan(loss_attnmap): ## 遇到了nan，发现是因为isnotnan全是false，学成了这样
+                        import pdb;pdb.set_trace()
+                        
+                    loss_attnmap = torch.nan_to_num(loss_attnmap) ## TODO
+                    loss_attnmap_list.append(loss_attnmap)
+                    # self.loss_update(losses, loss_attnmap, 'attnmap')
+                loss_attnmap = torch.stack(loss_attnmap_list).mean()
+                losses.update({'attnmap_loss': loss_attnmap*self.loss_weights.loss_attnmap})
                 
         return losses, new_gt_idxs_list_layers
     
