@@ -12,11 +12,11 @@ experiments='debug' # 需要设置datagen=0
 # experiments='xxx'
 is_ndetr = not ('PlanT' in experiments or experiments=='datagen')
 if is_ndetr:
-    config="projects/configs/detr3d/new/bs_box_wpattn_norouteandmap.py"
+    # config="projects/configs/detr3d/new/bs_box_wpattn_norouteandmap.py"
     # checkpoint='work_dirs/bs_box_wpattn_norouteandmap/2023-02-24_14:30:12/epoch_18.pth'
-    checkpoint='pretrain/wp_noroute.pth'
-    # config="projects/configs/detr3d/new/bs_box_wpattn_refine.py"
-    # checkpoint='pretrain/cross_attn.pth'
+    # checkpoint='pretrain/wp_noroute.pth'
+    config="projects/configs/detr3d/new/bs_box_wpattn_refine.py"
+    checkpoint='pretrain/cross_attn.pth'
 else:
     config=experiments+'.py'
     checkpoint='no.pth'
@@ -29,7 +29,7 @@ else:
 datagen=0
 # eval_="longest6_debug"
 eval_="longest6"
-port="25"
+port="45"
 resume=1
 timeout=200
 unblock=False
@@ -40,7 +40,7 @@ save_path=osp.join('./output/output', osp.splitext(osp.basename(config))[0])+ "/
 
 p = subprocess.Popen(f"SDL_VIDEODRIVER=offscreen $CARLA_SERVER -carla-rpc-port=20{port} -nosound -opengl", shell=True)
 
-time.sleep(10)
+time.sleep(3)
 
 t1 = time.time()
 
