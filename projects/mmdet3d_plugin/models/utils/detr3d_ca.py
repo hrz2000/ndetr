@@ -200,15 +200,17 @@ class Detr3DCrossAtten(BaseModule):
             nn.ReLU(inplace=True),
         )
         self.batch_first = batch_first
+
         
-        if self.wp_refine:
+        if self.wp_global_attn:
+            self.cross_attn = CrossAttn()
+        elif self.wp_refine: # TODO: 应该改一下逻辑
             num_points = 4
             self.attention_weights2 = nn.Linear(embed_dims,
                                             num_cams*num_levels*num_points)
 
             self.output_proj2 = nn.Linear(embed_dims, embed_dims)
-            if self.wp_global_attn:
-                self.cross_attn = CrossAttn()
+
 
         self.init_weight()
 
@@ -316,14 +318,19 @@ class Detr3DCrossAtten(BaseModule):
 
         output = self.dropout(output) + inp_residual + pos_feat
         
-        if self.wp_refine:
-            if self.wp_global_attn:
-                fv_feat_lvl1 = value[0]
-                fv_feat_cam0 = fv_feat_lvl1[:,0]
-                fv_feat = fv_feat_cam0 # bs, c, h, w
-                wp_emb, wp_pos = self.cross_attn(query=wp_emb, key=fv_feat, query_pos=wp_emb_pos, key_pos=None, use_fv_sinpe=True)
-            else:
-                wp_emb = self.attn(wp_emb, None, value, query_pos=wp_emb_pos, reference_points=reference_points2, num_point=4, **kwargs)
+        if self.wp_global_attn:
+            fv_feat_lvl1 = value[0]
+            fv_feat_cam0 = fv_feat_lvl1[:,0]
+            fv_feat = fv_feat_cam0 # bs, c, h, w
+            wp_emb, wp_pos = self.cross_attn(query=wp_emb, key=fv_feat, query_pos=wp_emb_pos, key_pos=None, use_fv_sinpe=True)
+        elif self.wp_refine:
+            # if self.wp_global_attn:
+            #     fv_feat_lvl1 = value[0]
+            #     fv_feat_cam0 = fv_feat_lvl1[:,0]
+            #     fv_feat = fv_feat_cam0 # bs, c, h, w
+            #     wp_emb, wp_pos = self.cross_attn(query=wp_emb, key=fv_feat, query_pos=wp_emb_pos, key_pos=None, use_fv_sinpe=True)
+            # else:
+            wp_emb = self.attn(wp_emb, None, value, query_pos=wp_emb_pos, reference_points=reference_points2, num_point=4, **kwargs)
         
         output = torch.cat([wp_emb, other_query, output], dim=0)
         return output
