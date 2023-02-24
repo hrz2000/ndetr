@@ -261,6 +261,7 @@ def main():
     # add an attribute for visualization convenience
     model.CLASSES = datasets[0].CLASSES
     print("start train_detector........................")
+    sys.stdout.flush() ## TODO
     train_detector(
         model,
         datasets,

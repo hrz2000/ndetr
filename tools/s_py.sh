@@ -11,8 +11,8 @@ CPUS_PER_TASK=8
 
 PY_ARGS=${@:3}
 
-srun -p shlab-perceptionx \
-    --quotatype=auto \
+srun -p shlab-perceptionx-s2 \
+    --quotatype=reserved \
     --mpi=pmi2 \
     --job-name=${name} \
     --gres=gpu:${GPUS_PER_NODE} \

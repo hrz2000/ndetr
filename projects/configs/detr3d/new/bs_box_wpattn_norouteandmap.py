@@ -1,6 +1,21 @@
 _base_ = ['../../../../mmdetection3d/configs/_base_/datasets/nus-3d.py']
 from projects.configs.detr3d.new.common import *
 
+log_config = dict(
+    interval=1,
+    hooks=[
+        dict(type='TextLoggerHook'),
+        dict(type='TensorboardLoggerHook'),
+        dict(
+            type='WandbLoggerHook', 
+            init_kwargs=dict(
+                project='your-awesome-project',
+                resume=True,
+                )
+                # resume='auto'
+            )
+    ])
+
 find_unused_parameters=True
 use_all_map=False
 use_gt_light=False
@@ -276,7 +291,7 @@ lr_config = dict(
     warmup_ratio=1.0 / 3,
     min_lr_ratio=1e-3)
 total_epochs = 18
-evaluation = dict(interval=3, pipeline=test_pipeline, save_best="wp", less_keys=['wp'])
+evaluation = dict(interval=3, pipeline=test_pipeline, save_best="wp", less_keys=['wp'], gpu_collect=True)
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 # load_from='pretrain/route.pth'
