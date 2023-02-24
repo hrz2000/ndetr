@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
+export TMPDIR=~/hrz/tmp
+
 CONFIG=$1
 GPUS=$2
-PORT=${PORT:-28531}
+PORT=${PORT:-28631}
 
 PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
 python -m torch.distributed.launch --nproc_per_node=$GPUS --master_port=$PORT \

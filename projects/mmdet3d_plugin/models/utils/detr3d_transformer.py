@@ -37,9 +37,12 @@ class Detr3DTransformer(BaseModule):
                 use_type_emb = True,
                 wp_refine = None,
                 temporal = None,
+                route_mask = 0.0,
                  **kwargs):
         
         super(Detr3DTransformer, self).__init__(**kwargs)
+        self.route_mask = route_mask
+        
         self.decoder = build_transformer_layer_sequence(decoder)
         self.embed_dims = self.decoder.embed_dims
         self.num_feature_levels = num_feature_levels
@@ -162,9 +165,13 @@ class Detr3DTransformer(BaseModule):
         if self.use_route_query:
             if self.use_route_query != 'no':
                 # import pdb;pdb.set_trace()
-                route_batch = np.stack([t['plan']['route'][0] for t in img_metas]) # bs,6
-                route_batch = query.new_tensor(route_batch)
-                route_emb = self.route_emb(route_batch)
+                if np.random.rand() < self.route_mask:
+                    bs = len(img_metas)
+                    route_emb = query.new_tensor(np.random.randn(bs, 512))  # 2*18*18->256d
+                else:
+                    route_batch = np.stack([t['plan']['route'][0] for t in img_metas]) # bs,6
+                    route_batch = query.new_tensor(route_batch)
+                    route_emb = self.route_emb(route_batch)
             else:
                 bs = len(img_metas)
                 route_emb = query.new_tensor(np.random.randn(bs, 512))  # 2*18*18->256d
