@@ -14,13 +14,10 @@ is_ndetr = not ('PlanT' in experiments or experiments=='datagen')
 if is_ndetr:
     config="projects/configs/detr3d/new/bs_box_wpattn_norouteandmap.py"
     # checkpoint='work_dirs/bs_box_wpattn_norouteandmap/2023-02-24_14:30:12/epoch_18.pth'
-    checkpoint='pretrain/wp_noroute.pth'
-    
-    # config="projects/configs/detr3d/new/bs_box_wpattn_refine.py"
+    # checkpoint='pretrain/wp_noroute.pth'
+    config="projects/configs/detr3d/new/bs_box_wpattn_refine.py"
     # checkpoint='pretrain/cross_attn.pth'
-
-    # config="projects/configs/detr3d/new/bs_box_wpattn_new.py"
-    # checkpoint='pretrain/new.pth'
+    checkpoint='work_dirs/bs_box_wpattn_refine/2023-02-24_12:23:34/epoch_18.pth'
 else:
     config=experiments+'.py'
     checkpoint='no.pth'
@@ -33,7 +30,7 @@ else:
 datagen=0
 # eval_="longest6_debug"
 eval_="longest6"
-port="40"
+port="00"
 resume=1
 timeout=200
 unblock=False
@@ -44,7 +41,7 @@ repetitions=1
 # save_path='output/output/bs_box_wpattn_new/2023-02-24_10:43:53'
 save_path='output/output/bs_box_wpattn_norouteandmap/2023-02-24_23:00:18'
 
-p = subprocess.Popen(f"SDL_VIDEODRIVER=offscreen $CARLA_SERVER -carla-rpc-port=20{port} -nosound -opengl", shell=True)
+# p = subprocess.Popen(f"SDL_VIDEODRIVER=offscreen $CARLA_SERVER -carla-rpc-port=20{port} -nosound -opengl", shell=True)
 
 time.sleep(3)
 

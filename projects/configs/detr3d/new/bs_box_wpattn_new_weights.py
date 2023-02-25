@@ -1,13 +1,11 @@
 _base_ = ['../../../../mmdetection3d/configs/_base_/datasets/nus-3d.py']
 from projects.configs.detr3d.new.common import *
 
-find_unused_parameters=True
-wp_global_attn=True
 use_all_map=False
 use_gt_light=False
 use_det_metric=False
 loss_weights=dict(
-    loss_attnmap=1
+    loss_attnmap=10
 )
 
 batch=32
@@ -105,7 +103,6 @@ model = dict(
                             dropout=0.1),
                         dict(
                             type='Detr3DCrossAtten',
-                            wp_global_attn=wp_global_attn,
                             pc_range=point_cloud_range,
                             wp_refine=wp_refine,
                             num_points=1,

@@ -14,14 +14,18 @@ timeout=60000
 unblock=False
 repetitions=1
 
-config="projects/configs/detr3d/new/bs_box_wpattn_new.py"
-checkpoint='work_dirs/bs_box_wpattn_new/2023-02-23_21:32:08/epoch_18.pth'
+# config="projects/configs/detr3d/new/bs_box_wpattn_new.py"
+# checkpoint='pretrain/bugfix.pth'
+config="projects/configs/detr3d/new/bs_box_wpattn_refine.py"
+checkpoint='pretrain/cross_attn.pth'
 name = osp.splitext(osp.basename(config))[0]
 save_path='output/output/detr_eval_split' + f"/{name}/" + time.strftime('%Y-%m-%d_%H:%M:%S')
 
 track='MAP'
 
 for idx in range(36):
+    if idx == 4:
+        break
     # todolist = [8,24,28,30,31,32,33,34,35]
     # if idx not in todolist:
     #     continue
