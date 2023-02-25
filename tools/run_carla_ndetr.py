@@ -30,7 +30,7 @@ else:
 datagen=0
 # eval_="longest6_debug"
 eval_="longest6"
-port="45"
+port="00"
 resume=1
 timeout=200
 unblock=False
@@ -39,7 +39,7 @@ repetitions=1
 
 save_path=osp.join('./output/output', osp.splitext(osp.basename(config))[0])+ "/" + time.strftime('%Y-%m-%d_%H:%M:%S')
 
-p = subprocess.Popen(f"SDL_VIDEODRIVER=offscreen $CARLA_SERVER -carla-rpc-port=20{port} -nosound -opengl", shell=True)
+# p = subprocess.Popen(f"SDL_VIDEODRIVER=offscreen $CARLA_SERVER -carla-rpc-port=20{port} -nosound -opengl", shell=True)
 
 time.sleep(3)
 
