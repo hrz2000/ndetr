@@ -37,6 +37,7 @@ __pycache__/
 /script/eval_sub/_*
 /wandb
 /mp4*
+/_*
 
 # C extensions
 *.so
