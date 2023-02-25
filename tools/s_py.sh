@@ -12,7 +12,7 @@ CPUS_PER_TASK=8
 PY_ARGS=${@:3}
 
 srun -p shlab-perceptionx-s2 \
-    --quotatype=reserved \
+    --quotatype=spot \
     --mpi=pmi2 \
     --job-name=${name} \
     --gres=gpu:${GPUS_PER_NODE} \
@@ -23,3 +23,4 @@ srun -p shlab-perceptionx-s2 \
     ${PY_ARGS} 2>&1|tee log/train-$now.log &
     # --quotatype=spot \
     # -w SH-IDC1-10-140-0-227 \
+    # -x SH-IDC1-10-140-24-79 \
