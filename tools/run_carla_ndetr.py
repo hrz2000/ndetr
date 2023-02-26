@@ -12,11 +12,13 @@ experiments='debug' # 需要设置datagen=0
 # experiments='xxx'
 is_ndetr = not ('PlanT' in experiments or experiments=='datagen')
 if is_ndetr:
-    config="projects/configs/detr3d/new/bs_box_wpattn_norouteandmap.py"
+    # config="projects/configs/detr3d/new/bs_box_wpattn_norouteandmap.py"
     # checkpoint='work_dirs/bs_box_wpattn_norouteandmap/2023-02-24_14:30:12/epoch_18.pth'
     # checkpoint='pretrain/wp_noroute.pth'
+    # config="projects/configs/detr3d/new/bs_box_wpattn_refine.py"
+    # # checkpoint='pretrain/cross_attn.pth'
+    # checkpoint='work_dirs/bs_box_wpattn_refine/2023-02-24_12:23:34/epoch_18.pth'
     config="projects/configs/detr3d/new/bs_box_wpattn_refine.py"
-    # checkpoint='pretrain/cross_attn.pth'
     checkpoint='work_dirs/bs_box_wpattn_refine/2023-02-24_12:23:34/epoch_18.pth'
 else:
     config=experiments+'.py'

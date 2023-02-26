@@ -3,7 +3,7 @@ import mmcv
 import numpy as np
 import os.path as osp
 
-a = 'output/output/detr_eval_split/bs_box_wpattn_new_weights/2023-02-26_10:18:48'
+a = 'output/output/detr_eval_split/bs_box_norouteandmap/2023-02-26_18:50:54'
 # a = 'output/output/detr_eval_split/bs_box_wpattn_filter/2023-02-22_00:45:40'
 # b = 'output/output/detr_eval_split/2023-02-17_10:55:27'
 fa = glob(f"{a}/*json")

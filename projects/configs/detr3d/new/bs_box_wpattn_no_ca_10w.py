@@ -1,6 +1,22 @@
 _base_ = ['../../../../mmdetection3d/configs/_base_/datasets/nus-3d.py']
 from projects.configs.detr3d.new.common import *
 
+log_config = dict(
+    interval=1,
+    hooks=[
+        dict(type='TextLoggerHook'),
+        dict(type='TensorboardLoggerHook'),
+        dict(
+            type='WandbLoggerHook', 
+            init_kwargs=dict(
+                project='your-awesome-project',
+                resume=True,
+                )
+                # resume='auto'
+            )
+    ])
+
+find_unused_parameters=True
 use_all_map=False
 use_gt_light=False
 use_det_metric=False
@@ -13,8 +29,8 @@ workers=4
 lr=2e-4
 num_query=50
 
-wp_refine=None # gru, linear, None
-wp_refine_input_last=False
+wp_refine='gru' # gru, linear, None
+wp_refine_input_last=True
 
 gru_use_box=3
 velo_update=False
@@ -28,7 +44,7 @@ penalty_args = dict(
 
 enable_uncertainty_loss_weight=False
 
-temporal=None
+temporal=None 
 # temporal='bevformer' # bevformer,mutr3d,gruinfer
 # find_unused_parameters=True # no_grad的时候，需要
 
@@ -82,8 +98,8 @@ model = dict(
         transformer=dict(
             type='Detr3DTransformer',
             use_wp_query = True,
-            use_bev_query = True,
-            use_route_query = True,
+            use_bev_query = 'no',
+            use_route_query = 'no',
             route_num_attributes = 6,
             use_type_emb = True,
             wp_refine = wp_refine,

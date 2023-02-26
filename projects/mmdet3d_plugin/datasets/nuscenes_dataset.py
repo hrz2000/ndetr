@@ -194,7 +194,8 @@ class CustomNuScenesDataset(Custom3DDataset):
             # data_infos = data_infos[1185:1300]
         elif self.in_test:
             # data_infos = data_infos[0:1210]
-            data_infos = data_infos[0:4083]
+            # data_infos = data_infos[0:4083]
+            data_infos = data_infos[0:1278]
             pass
         return data_infos
 
@@ -688,11 +689,17 @@ class CustomNuScenesDataset(Custom3DDataset):
         # 对不同batch的loss进行平均
         hardcase = {}
         loss_dict = {}
+        gt_max_obj_weight_list = []
+        max_obj_weight_list = []
+        gt_route_weight_list = []
+        route_weight_list = []
+        gt_mean_obj_weight_list = []
+        mean_obj_weight_list = []
         for idx_r, batch_i_result in enumerate(batch_results): # 这个是loss函数返回的结果
             pts_bbox = batch_i_result['pts_bbox'] # dict_keys(['boxes_3d', 'scores_3d', 'labels_3d', 'attrs_3d', 'matched_idxs', 'refine_wp', 'route_wp', 'iscollide', 'fut_boxes', 'attnmap', 'wp_attn', 'img_metas']) (2,)
             
-            route_weight, self_weight, max_obj_weight = get_weight(pts_bbox)
-            gt_route_weight, gt_self_weight, gt_max_obj_weight = get_weight(gt_results[idx_r]['pts_bbox'])
+            route_weight, mean_obj_weight, max_obj_weight = get_weight(pts_bbox)
+            gt_route_weight, gt_mean_obj_weight, gt_max_obj_weight = get_weight(gt_results[idx_r]['pts_bbox'])
             
             gt_box = gt_results[idx_r]['pts_bbox'] # (8, 8, 50, 50) dict_keys(['boxes_3d', 'scores_3d', 'labels_3d', 'gt_idxs', 'wp_attn', 'ori_attnmap', 'len_box_route', 'len_box', 'attrs_3d', 'tp', 'light', 'command', 'route', 'route_wp', 'iscollide', 'cam2img', 'imgpath', 'topdown', 'hdmap'])
             ori_attnmap = gt_box['ori_attnmap']
@@ -702,8 +709,12 @@ class CustomNuScenesDataset(Custom3DDataset):
             len_gt = len(gt_box['gt_idxs'])
             # wp_attn应该是(8head,1+1+1)维度
             
-            # print(f"max_obj_attn: {gt_max_obj_weight:.3f}, {max_obj_weight.item():.3f}")
-            # print(f"route_attn: {gt_route_weight:.3f}, {route_weight.item():.3f}")
+            gt_max_obj_weight_list.append(gt_max_obj_weight)
+            gt_mean_obj_weight_list.append(gt_mean_obj_weight)
+            max_obj_weight_list.append(max_obj_weight.item())
+            mean_obj_weight_list.append(mean_obj_weight.item())
+            gt_route_weight_list.append(gt_route_weight)
+            route_weight_list.append(route_weight.item())
             
             result = batch_i_result['loss']
             attnmap_loss = result['attnmap_loss']
@@ -719,7 +730,21 @@ class CustomNuScenesDataset(Custom3DDataset):
                 if idx_r == len(batch_results) - 1:
                     loss_dict[k] /= len(batch_results)
         results_dict.update(loss_dict)
-
+        
+        gt_max_obj_weight_list = np.array(gt_max_obj_weight_list)
+        max_obj_weight_list = np.array(max_obj_weight_list)
+        gt_route_weight_list = np.array(gt_route_weight_list)
+        route_weight_list = np.array(route_weight_list)
+        gt_mean_obj_weight_list = np.array(gt_mean_obj_weight_list)
+        mean_obj_weight_list = np.array(mean_obj_weight_list)
+        
+        print(gt_max_obj_weight_list.mean())
+        print(max_obj_weight_list.mean())
+        print(gt_route_weight_list.mean())
+        print(route_weight_list.mean())
+        print(gt_mean_obj_weight_list.mean())
+        print(mean_obj_weight_list.mean())
+        
         if self.vis:
             self.show_ndetr(batch_results, gt_results, self.vis_dir, show=self.vis, pipeline=pipeline, hardcase=hardcase)
 
@@ -1129,4 +1154,5 @@ def get_weight(pts_bbox):
     route_weight = meanhead_attn[-1]
     self_weight = meanhead_attn[0]
     max_obj_weight = meanhead_attn[0:-1].max()
-    return route_weight, self_weight, max_obj_weight
+    mean_obj_weight = meanhead_attn[0:-1].mean()
+    return route_weight, mean_obj_weight, max_obj_weight
