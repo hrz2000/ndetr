@@ -274,6 +274,7 @@ class CustomNuScenesDataset(Custom3DDataset):
 
         ## attn
         attnmap = attn_info['attn_map'] # (8, 8, 42, 42)
+        ori_attnmap = copy.deepcopy(attnmap)
         input_idx = attn_info['input_idx'] # 21
         output_idx = attn_info['output_idx'] # 理论上inp和oup的idx是完全一样的
         # 后面的0,1代表route的idx
@@ -380,7 +381,11 @@ class CustomNuScenesDataset(Custom3DDataset):
             wp_attn=wp_attn,
             attnmap=attnmap,
             gt_pl_lack=gt_pl_lack,
-            ego_box_3d=ego_box_3d
+            ego_box_3d=ego_box_3d,
+            
+            ori_attnmap=ori_attnmap,
+            len_box_route=len_box_route,
+            len_box=len_box
         )
         return anns_results
 
@@ -398,11 +403,19 @@ class CustomNuScenesDataset(Custom3DDataset):
         imgpath = data_info['img_filename'][0] # TODO
             
         gt_pts_bbox = dict(
-            boxes_3d=LiDARInstance3DBoxes.cat([ego_box_3d, gt_bboxes_3d]),
-            scores_3d=np.ones_like([1,*gt_labels_3d]),
-            labels_3d=np.array([1,*gt_labels_3d]),
-            gt_idxs=np.array([0,*gt_idxs]), # 第一个是ego
-            wp_attn=np.array([*wp_attn]), # 第一个是ego那个cls_emb，后面都正常索引
+            # boxes_3d=LiDARInstance3DBoxes.cat([ego_box_3d, gt_bboxes_3d]),
+            # scores_3d=np.ones_like([1,*gt_labels_3d]),
+            # labels_3d=np.array([1,*gt_labels_3d]),
+            # gt_idxs=np.array([0,*gt_idxs]), # 第一个是ego
+            boxes_3d=gt_bboxes_3d,
+            scores_3d=gt_labels_3d,
+            labels_3d=gt_labels_3d,
+            gt_idxs=gt_idxs,
+            wp_attn=wp_attn,
+            
+            ori_attnmap=anns_results['ori_attnmap'],
+            len_box_route=anns_results['len_box_route'],
+            len_box=anns_results['len_box'],
             
             attrs_3d=data_info['plan']['wp'],
             tp=data_info['plan']['tp'],
@@ -676,7 +689,22 @@ class CustomNuScenesDataset(Custom3DDataset):
         hardcase = {}
         loss_dict = {}
         for idx_r, batch_i_result in enumerate(batch_results): # 这个是loss函数返回的结果
-            pts_bbox = batch_i_result['pts_bbox']
+            pts_bbox = batch_i_result['pts_bbox'] # dict_keys(['boxes_3d', 'scores_3d', 'labels_3d', 'attrs_3d', 'matched_idxs', 'refine_wp', 'route_wp', 'iscollide', 'fut_boxes', 'attnmap', 'wp_attn', 'img_metas']) (2,)
+            
+            route_weight, self_weight, max_obj_weight = get_weight(pts_bbox)
+            gt_route_weight, gt_self_weight, gt_max_obj_weight = get_weight(gt_results[idx_r]['pts_bbox'])
+            
+            gt_box = gt_results[idx_r]['pts_bbox'] # (8, 8, 50, 50) dict_keys(['boxes_3d', 'scores_3d', 'labels_3d', 'gt_idxs', 'wp_attn', 'ori_attnmap', 'len_box_route', 'len_box', 'attrs_3d', 'tp', 'light', 'command', 'route', 'route_wp', 'iscollide', 'cam2img', 'imgpath', 'topdown', 'hdmap'])
+            ori_attnmap = gt_box['ori_attnmap']
+            ori_attnmap = ori_attnmap[:,:,0:1,:]
+            len_box_route = gt_box['len_box_route']
+            len_box = gt_box['len_box']
+            len_gt = len(gt_box['gt_idxs'])
+            # wp_attn应该是(8head,1+1+1)维度
+            
+            # print(f"max_obj_attn: {gt_max_obj_weight:.3f}, {max_obj_weight.item():.3f}")
+            # print(f"route_attn: {gt_route_weight:.3f}, {route_weight.item():.3f}")
+            
             result = batch_i_result['loss']
             attnmap_loss = result['attnmap_loss']
             wp_loss = result['wp']
@@ -1094,3 +1122,11 @@ def rel2s3(string):
     # elif string.startswith('output/PlanT_val_1/coke_s3_dataset/Routes_l6_dataset'):
     #     return f"s3://tr_plan_hrz/l6_dataset/Routes_l6_dataset/{'/'.join(string.split('/')[4:])}"
     return f"s3://tr_plan_hrz_2/{'/'.join(string.split('/')[1:])}"
+
+def get_weight(pts_bbox):
+    wp_attn = pts_bbox['wp_attn'] # torch.Size([8, 4]) 8个头
+    meanhead_attn = wp_attn.mean(0)
+    route_weight = meanhead_attn[-1]
+    self_weight = meanhead_attn[0]
+    max_obj_weight = meanhead_attn[0:-1].max()
+    return route_weight, self_weight, max_obj_weight

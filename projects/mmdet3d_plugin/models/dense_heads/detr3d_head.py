@@ -271,8 +271,10 @@ class Detr3DHead(DETRHead):
                 use_focal = False,
                 use_kl = False,
                 all_layers = False,
+                use_batch_weights = False,
                  **kwargs
                  ):
+        self.use_batch_weights = use_batch_weights
         self.all_layers = all_layers
         self.use_kl = use_kl
         self.use_focal = use_focal
@@ -808,8 +810,7 @@ class Detr3DHead(DETRHead):
         batch_weights = torch.sqrt((gt_wp[:,:,0] + 1.3)**2 + (gt_wp[:,:,1])**2).mean(-1) + 1 # 越小权重越大, 曲率越大权重越大
         gt_wp = gt_wp.unsqueeze(0).repeat(len(pred_wp),1,1,1) # torch.Size([6, 2, 4, 2])
         losses_wp = F.l1_loss(pred_wp, gt_wp, reduction='none').mean([2,3])
-        use_batch_weights = True
-        if use_batch_weights:
+        if self.use_batch_weights:
             losses_wp = losses_wp * batch_weights[None]
         losses_wp = losses_wp.mean(-1)
         self.loss_update(losses, losses_wp, 'wp')
