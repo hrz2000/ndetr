@@ -193,8 +193,9 @@ class CustomNuScenesDataset(Custom3DDataset):
             data_infos = [data_infos[i] for i in [20,30,40,50,100,500,700,800,900,1200,1190]]
             # data_infos = data_infos[1185:1300]
         elif self.in_test:
-            # data_infos = data_infos[:5]
-            data_infos = data_infos[0:1210]
+            # data_infos = data_infos[0:1210]
+            data_infos = data_infos[0:4083]
+            pass
         return data_infos
 
     def get_data_info(self, index):
@@ -671,13 +672,18 @@ class CustomNuScenesDataset(Custom3DDataset):
         else:
             results_dict = {}
 
-        if self.vis:
-            self.show_ndetr(batch_results, gt_results, self.vis_dir, show=self.vis, pipeline=pipeline)
-        
         # 对不同batch的loss进行平均
+        hardcase = {}
         loss_dict = {}
-        for idx_r, result in enumerate(batch_results):
-            result = result['loss']
+        for idx_r, batch_i_result in enumerate(batch_results): # 这个是loss函数返回的结果
+            pts_bbox = batch_i_result['pts_bbox']
+            result = batch_i_result['loss']
+            attnmap_loss = result['attnmap_loss']
+            wp_loss = result['wp']
+            iscollide = pts_bbox['iscollide']
+            if wp_loss > 1.5 and not iscollide:
+                hardcase[idx_r] = wp_loss
+                
             for k in result:
                 if idx_r == 0:
                     loss_dict[k] = 0
@@ -685,6 +691,9 @@ class CustomNuScenesDataset(Custom3DDataset):
                 if idx_r == len(batch_results) - 1:
                     loss_dict[k] /= len(batch_results)
         results_dict.update(loss_dict)
+
+        if self.vis:
+            self.show_ndetr(batch_results, gt_results, self.vis_dir, show=self.vis, pipeline=pipeline, hardcase=hardcase)
 
         return results_dict
 
@@ -709,7 +718,7 @@ class CustomNuScenesDataset(Custom3DDataset):
         ]
         return Compose(pipeline)
 
-    def show_ndetr(self, results, gt_results, out_dir, show=False, pipeline=None):
+    def show_ndetr(self, results, gt_results, out_dir, show=False, pipeline=None, hardcase=None):
         """Results visualization.
 
         Args:
@@ -720,12 +729,14 @@ class CustomNuScenesDataset(Custom3DDataset):
             pipeline (list[dict], optional): raw data loading for showing.
                 Default: None.
         """
-        pipeline = self._get_pipeline(pipeline)
+        # pipeline = self._get_pipeline(pipeline)
         for idx, (pred_pts_bbox, gt_pts_bbox) in enumerate(zip(results, gt_results)):
+            if idx not in hardcase:
+                continue
             if 'pts_bbox' in pred_pts_bbox.keys():
                 pred_pts_bbox = pred_pts_bbox['pts_bbox']
                 gt_pts_bbox = gt_pts_bbox['pts_bbox']
-            show_results(idx, pred_pts_bbox, gt_pts_bbox, out_dir)
+            show_results(idx, pred_pts_bbox, gt_pts_bbox, out_dir, wploss=hardcase[idx])
         
     def prepare_one_train_data(self, index):
         input_dict = self.get_data_info(index)
@@ -858,7 +869,7 @@ def make_mat(data_info, mat, is_carla):
     cam2ego[:3,-1] = data_info[f'{mat}_translation']
     return cam2ego
 
-def show_results(index, pred_pts_bbox, gt_pts_bbox, out_dir, img=None, in_simu=False):
+def show_results(index, pred_pts_bbox, gt_pts_bbox, out_dir, img=None, in_simu=False, wploss=None):
     mmcv.mkdir_or_exist(out_dir)
     
     cam2img = gt_pts_bbox['cam2img']
@@ -866,7 +877,7 @@ def show_results(index, pred_pts_bbox, gt_pts_bbox, out_dir, img=None, in_simu=F
     if img is None:
         front_img = mmcv.imread(gt_pts_bbox['imgpath']) # TODO
     front_img = create_front(pred_pts_bbox, gt_pts_bbox, front_img, cam2img)
-    bev_img = create_bev(pred_pts_bbox, gt_pts_bbox)
+    bev_img =  create_bev(pred_pts_bbox, gt_pts_bbox, wploss=wploss)
     collide_img = create_collide_bev(pred_pts_bbox=pred_pts_bbox, 
                                      gt_pts_bbox=dict(), # 没有传入预测的box和wp所以是也是none
                                      only_box_for_col_det=dict(

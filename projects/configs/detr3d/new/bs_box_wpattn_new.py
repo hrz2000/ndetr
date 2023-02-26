@@ -3,7 +3,7 @@ from projects.configs.detr3d.new.common import *
 
 use_all_map=False
 use_gt_light=False
-use_det_metric=False
+use_det_metric=True
 loss_weights=dict(
     loss_attnmap=1
 )

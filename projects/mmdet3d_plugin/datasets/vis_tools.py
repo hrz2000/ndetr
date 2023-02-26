@@ -255,7 +255,7 @@ def create_collide_bev(pred_pts_bbox, gt_pts_bbox, only_box_for_col_det=None, PI
         img_and = np.logical_and(img_box, img_wp)
         return img_and
     
-def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300)):
+def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300), wploss=None):
     if gt_pts_bbox['topdown'] is not None:
         img = Image.fromarray(mmcv.imread(gt_pts_bbox['topdown']))
         size = img.size
@@ -348,7 +348,8 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
     
     gt_wp = copy.deepcopy(gt_pts_bbox.get('attrs_3d', None))
     pred_wp = copy.deepcopy(pred_pts_bbox.get('attrs_3d', None))
-    route_wp = copy.deepcopy(pred_pts_bbox.get('route_wp', None)) # 避免原地修改
+    # route_wp = copy.deepcopy(pred_pts_bbox.get('route_wp', None)) # 避免原地修改
+    route_wp = None
     for idx, (wp, c) in enumerate([(gt_wp,"forestgreen"), (pred_wp,"blue"), (route_wp, 'orange')]):
         if wp is None:
             continue
@@ -408,6 +409,8 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
         string = 'true' if iscollide else 'false'
         draw.text((0,30), f"iscollide: {string}", fill=fill_, width=2)
 
+    if wploss is not None:
+        draw.text((0,40), f"wploss: {wploss.item():.2f}", fill='red', width=2)
     img = np.array(img)[:,:,::-1]
     return img
 

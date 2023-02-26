@@ -513,15 +513,24 @@ class Detr3DHead(DETRHead):
         route_wp = self.get_route_wp(all_wp_preds, route_batch, nlayer=len(wp_embs))
         iscollide = self.get_iscollide(batch_pts_boxes)
         
+        collision_avoidance = False
+        if collision_avoidance:
+            for batch_i, batch_i_col in enumerate(iscollide):
+                if batch_i_col:
+                    all_wp_preds[:, batch_i, :, 0] = (all_wp_preds[:, batch_i, :, 0] + 1.3)/2 - 1.3
+                    all_wp_preds[:, batch_i, :, 1] = 0
+                            
         outs = {
             'all_cls_scores': outputs_classes, # torch.Size([6, 1, 50, 2])
             'all_bbox_preds': outputs_coords,  # torch.Size([6, 1, 50, 10])
             'refine_wp': refine_wp_layers if self.wp_refine else None,  # torch.Size([6, bs=1, 4, 2])
             'enc_cls_scores': None,
             'enc_bbox_preds': None,
-            'all_wp_preds': all_wp_preds,
+            'all_wp_preds': all_wp_preds, # torch.Size([6, 1, 4, 2])
             'fut_boxes': box_batch, # (bs,3,npred,10d)
+            
             'route_wp': route_wp,
+            
             'iscollide': iscollide,
             'tp': tp_batch,
             'inter_attnmap': inter_attnmap,
@@ -795,9 +804,14 @@ class Detr3DHead(DETRHead):
         
         # wp_loss
         gt_wp = np.stack([m['plan']['wp'] for m in img_metas],axis=0)
-        gt_wp = pred_wp.new_tensor(gt_wp)
+        gt_wp = pred_wp.new_tensor(gt_wp) # torch.Size([1, 4, 2])
+        batch_weights = torch.sqrt((gt_wp[:,:,0] + 1.3)**2 + (gt_wp[:,:,1])**2).mean(-1) + 1 # 越小权重越大, 曲率越大权重越大
         gt_wp = gt_wp.unsqueeze(0).repeat(len(pred_wp),1,1,1) # torch.Size([6, 2, 4, 2])
-        losses_wp = F.l1_loss(pred_wp, gt_wp, reduction='none').mean([1,2,3])
+        losses_wp = F.l1_loss(pred_wp, gt_wp, reduction='none').mean([2,3])
+        use_batch_weights = True
+        if use_batch_weights:
+            losses_wp = losses_wp * batch_weights[None]
+        losses_wp = losses_wp.mean(-1)
         self.loss_update(losses, losses_wp, 'wp')
             
         if self.wp_refine:
@@ -1085,8 +1099,8 @@ class Detr3DHead(DETRHead):
             if outs['fut_boxes'] is not None:
                 fut_boxes=outs['fut_boxes'][i].cpu()
             if outs['attnmap'] is not None:
-                attnmap=outs['attnmap'][-1][i].cpu()
-                attnmap=torch.cat([t for t in attnmap], axis=1)
+                attnmap=outs['attnmap'][-1][i].cpu() # torch.Size([8, 53, 53])
+                attnmap=torch.cat([t for t in attnmap], axis=1) # concat起来用于可视化
             pts_bbox = dict(
                 boxes_3d=bboxes.to('cpu'),
                 scores_3d=scores.cpu(),
