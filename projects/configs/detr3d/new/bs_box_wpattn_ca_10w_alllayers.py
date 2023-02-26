@@ -65,6 +65,7 @@ model = dict(
         relu_before_extra_convs=True),
     pts_bbox_head=dict(
         type='Detr3DHead',
+        gt_use_meanlayers_attn=gt_use_meanlayers_attn,
         all_layers=all_layers,
         use_all_map=use_all_map,
         use_gt_light=use_gt_light,

@@ -272,8 +272,10 @@ class Detr3DHead(DETRHead):
                 use_kl = False,
                 all_layers = False,
                 use_batch_weights = False,
+                gt_use_meanlayers_attn = False,
                  **kwargs
                  ):
+        self.gt_use_meanlayers_attn = gt_use_meanlayers_attn
         self.use_batch_weights = use_batch_weights
         self.all_layers = all_layers
         self.use_kl = use_kl
@@ -852,7 +854,10 @@ class Detr3DHead(DETRHead):
                     # torch.Size([6, 8, 12, 12])
                     
                     if self.all_layers:
-                        gt_attnmap = gt_attnmap[-1:] # torch.Size([1, 8, 14, 14])
+                        if self.gt_use_meanlayers_attn:
+                            gt_attnmap = gt_attnmap.mean(0,keep_dim=True)
+                        else:
+                            gt_attnmap = gt_attnmap[-1:] # torch.Size([1, 8, 14, 14]) 这是在拿最后一层监督预测的所有层，但是在数据处理的时候，可以处理成多层的平均值
                         new_map = new_map # torch.Size([6, 8, 14, 14])
                     else: # 只要最后一层
                         gt_attnmap = gt_attnmap[-1:]
@@ -862,6 +867,7 @@ class Detr3DHead(DETRHead):
                     gt_pl_have = np.array(gt_pl_lack) == False
                     
                     # pred对应没有的也不监督
+                    # TODO: 可以区分一下map监督还是list一行监督
                     gt_attnmap_filter = gt_attnmap[:,:,gt_pl_have][:,:,:,gt_pl_have]
                     pred_attnmap_filter = new_map[:,:,gt_pl_have][:,:,:,gt_pl_have]
                     
@@ -1063,6 +1069,7 @@ class Detr3DHead(DETRHead):
                 matched_idxs=matched_idxs,
                 # attrs_3d=outs['all_wp_preds'][-1][i] # 每个bs的最后一层
             ) for i, (bboxes, scores, labels, wp_attn, matched_idxs) in enumerate(ret_list)]
+            # wp_attn都保留了头
         
         bbox_results = []
         for i, (bboxes, scores, labels, wp_attn, matched_idxs) in enumerate(ret_list):

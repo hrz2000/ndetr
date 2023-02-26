@@ -56,14 +56,13 @@ class NMSFreeCoder(BaseBBoxCoder):
         # bbox_index = indexs // self.num_classes # 第i个预测的box的索引
         bbox_index = torch.div(indexs, self.num_classes, rounding_mode='trunc') # 第i个预测的box的索引
         bbox_preds = bbox_preds[bbox_index] # torch.Size([300, 10])
-        if attnmap is not None:
-            # 8个头需要平均一下
+        if attnmap is not None: # single说的不是layers，是batch
             # attnmap = attnmap.mean(0)
             # attnmap = attnmap[1] # 第一个head
-            wp_wp = attnmap[:,0,0:1] # 
+            wp_wp = attnmap[:,0,0:1] # 所有head
+            # 在decode的时候已经对layers进行了平均，这里保留头
             wp_route = attnmap[:,0,1:2] # TODO
             wp_attn = attnmap[:,0,3:] # torch.Size([300, 10])
-            # 这里进行了抛弃前三个东西的操作
             assert wp_attn.shape[-1] == 50
             wp_attn = wp_attn[:,bbox_index]
         else:
@@ -109,8 +108,7 @@ class NMSFreeCoder(BaseBBoxCoder):
             labels = final_preds[mask]
             if wp_attn is not None:
                 wp_attn = wp_attn[:,mask]
-                # import pdb;pdb.set_trace()
-                wp_attn = torch.cat([wp_wp, wp_attn, wp_route],dim=-1) # TODO
+                wp_attn = torch.cat([wp_wp, wp_attn, wp_route],dim=-1) # torch.Size([8, 4])
                 
             if new_gt_idxs_list is not None:
                 new_gt_idxs_list = new_gt_idxs_list[mask]
@@ -141,11 +139,12 @@ class NMSFreeCoder(BaseBBoxCoder):
         Returns:
             list[dict]: Decoded boxes.
         """
-        all_cls_scores = preds_dicts['all_cls_scores'][-1] # torch.Size([bs=1, 900, 2])
+        all_cls_scores = preds_dicts['all_cls_scores'][-1] # torch.Size([6, 1, 50, 2])->最后一层torch.Size([1, 50, 2])
         all_bbox_preds = preds_dicts['all_bbox_preds'][-1]
-        if 'attnmap' in preds_dicts:
-            attnmap = preds_dicts['attnmap'][-1]
-            # 均拿出最后一层的结果
+        if 'attnmap' in preds_dicts: # 这里是拿出最后一个batch
+            # preds_dicts['attnmap'] torch.Size([1, 6, 8, 53, 53])
+            attnmap = preds_dicts['attnmap'].mean(1) # 对6个layer平均，这些操作都是消除layers，保留batches
+            # attnmap = preds_dicts['attnmap'][-1] # TODO: 这里最后一层的结果 xxx
         else:
             attnmap = [None for i in range(len(all_bbox_preds))]
             

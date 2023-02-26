@@ -19,7 +19,7 @@ if is_ndetr:
     # # checkpoint='pretrain/cross_attn.pth'
     # checkpoint='work_dirs/bs_box_wpattn_refine/2023-02-24_12:23:34/epoch_18.pth'
     config="projects/configs/detr3d/new/bs_box_wpattn_refine.py"
-    checkpoint='work_dirs/bs_box_wpattn_refine/2023-02-24_12:23:34/epoch_18.pth'
+    checkpoint='pretrain/cross_attn.pth'
 else:
     config=experiments+'.py'
     checkpoint='no.pth'
@@ -32,7 +32,7 @@ else:
 datagen=0
 # eval_="longest6_debug"
 eval_="longest6"
-port="00"
+port="45"
 resume=1
 timeout=200
 unblock=False

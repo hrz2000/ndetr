@@ -3,12 +3,11 @@ from projects.configs.detr3d.new.common import *
 
 gt_use_meanlayers_attn=True
 all_layers=True
-find_unused_parameters=True
 use_all_map=False
 use_gt_light=False
 use_det_metric=False
 loss_weights=dict(
-    loss_attnmap=10
+    loss_attnmap=1
 )
 
 batch=32
@@ -16,8 +15,8 @@ workers=4
 lr=2e-4
 num_query=50
 
-wp_refine='gru' # gru, linear, None
-wp_refine_input_last=True
+wp_refine=None # gru, linear, None
+wp_refine_input_last=False
 
 gru_use_box=3
 velo_update=False
@@ -65,7 +64,6 @@ model = dict(
         relu_before_extra_convs=True),
     pts_bbox_head=dict(
         type='Detr3DHead',
-        gt_use_meanlayers_attn=gt_use_meanlayers_attn,
         all_layers=all_layers,
         use_all_map=use_all_map,
         use_gt_light=use_gt_light,
@@ -89,7 +87,6 @@ model = dict(
             use_wp_query = True,
             use_bev_query = True,
             use_route_query = True,
-            no_route = True,
             route_num_attributes = 6,
             use_type_emb = True,
             wp_refine = wp_refine,

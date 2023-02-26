@@ -369,9 +369,11 @@ class CustomNuScenesDataset(Custom3DDataset):
         # assert attnmap.shape[-1] == 1 + len(gt_idxs) + len_route
         assert attnmap.shape[-1] == 1 + len(gt_idxs) + 1
         
-        # import pdb;pdb.set_trace()
-        if self.gt_use_meanlayers_attn:
-            wp_attn = attnmap[:,:,0,:].mean(0)
+        # 实际上不需要attnmap，wp_attn
+        
+        show_all_layers_mean=True
+        if show_all_layers_mean: # 目前仅用作可视化
+            wp_attn = attnmap[:,:,0,:].mean(0) # 所有layers
         else:
             wp_attn = attnmap[-1,:,0,:] # wp对所有（wp、box、route）第一个head
         # wp_attn = attnmap[-1,:,0,:].mean(0) # wp对所有（wp、box、route）
