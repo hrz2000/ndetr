@@ -270,8 +270,10 @@ class Detr3DHead(DETRHead):
                 use_mmd = False,
                 use_focal = False,
                 use_kl = False,
+                all_layers = False,
                  **kwargs
                  ):
+        self.all_layers = all_layers
         self.use_kl = use_kl
         self.use_focal = use_focal
         self.use_mmd = use_mmd
@@ -831,10 +833,15 @@ class Detr3DHead(DETRHead):
                     new_map = attnmap[:,:,sorted_idxs][:,:,:,sorted_idxs] # torch.Size([6, 8, 12, 12])
                     
                     # 只要最后一层
-                    gt_attnmap = gt_attnmap[-1:]
-                    new_map = new_map[-1:]
+                    if self.all_layers:
+                        gt_attnmap = gt_attnmap[-1:] # torch.Size([1, 8, 14, 14])
+                        new_map = new_map # torch.Size([6, 8, 14, 14])
+                    else:
+                        gt_attnmap = gt_attnmap[-1:]
+                        new_map = new_map[-1:]
                     # gt_attnmap = gt_attnmap[-1:]
                     # new_map = new_map[:]
+                    # 
                     
                     gt_pl_lack = img_metas[batch_id]['gt_pl_lack']
                     gt_pl_have = np.array(gt_pl_lack) == False
