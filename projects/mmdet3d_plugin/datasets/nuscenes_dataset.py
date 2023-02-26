@@ -106,7 +106,9 @@ class CustomNuScenesDataset(Custom3DDataset):
                  debug=False,
                  use_det_metric=False,
                  in_test=False,
+                 gt_use_meanlayers_attn=False,
                  **kwargs):
+        self.gt_use_meanlayers_attn = gt_use_meanlayers_attn
         self.use_det_metric = use_det_metric 
         self.in_test = in_test
         self.prev = 3
@@ -368,7 +370,10 @@ class CustomNuScenesDataset(Custom3DDataset):
         assert attnmap.shape[-1] == 1 + len(gt_idxs) + 1
         
         # import pdb;pdb.set_trace()
-        wp_attn = attnmap[-1,:,0,:] # wp对所有（wp、box、route）第一个head
+        if self.gt_use_meanlayers_attn:
+            wp_attn = attnmap[:,:,0,:].mean(0)
+        else:
+            wp_attn = attnmap[-1,:,0,:] # wp对所有（wp、box、route）第一个head
         # wp_attn = attnmap[-1,:,0,:].mean(0) # wp对所有（wp、box、route）
         # 我们需要把wp_attn补全到和gt_idxs一样的格式
         # 对gt可视化的时候，前面concat上了ego

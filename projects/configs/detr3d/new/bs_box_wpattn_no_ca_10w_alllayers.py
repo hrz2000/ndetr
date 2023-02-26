@@ -1,21 +1,8 @@
 _base_ = ['../../../../mmdetection3d/configs/_base_/datasets/nus-3d.py']
 from projects.configs.detr3d.new.common import *
 
-log_config = dict(
-    interval=1,
-    hooks=[
-        dict(type='TextLoggerHook'),
-        dict(type='TensorboardLoggerHook'),
-        dict(
-            type='WandbLoggerHook', 
-            init_kwargs=dict(
-                project='your-awesome-project',
-                resume=True,
-                )
-                # resume='auto'
-            )
-    ])
-
+gt_use_meanlayers_attn=True
+all_layers=True
 find_unused_parameters=True
 use_all_map=False
 use_gt_light=False
@@ -78,6 +65,7 @@ model = dict(
         relu_before_extra_convs=True),
     pts_bbox_head=dict(
         type='Detr3DHead',
+        all_layers=all_layers,
         use_all_map=use_all_map,
         use_gt_light=use_gt_light,
         loss_weights=loss_weights,
@@ -98,8 +86,9 @@ model = dict(
         transformer=dict(
             type='Detr3DTransformer',
             use_wp_query = True,
-            use_bev_query = 'no',
-            use_route_query = 'no',
+            use_bev_query = True,
+            use_route_query = True,
+            no_route = True,
             route_num_attributes = 6,
             use_type_emb = True,
             wp_refine = wp_refine,
@@ -235,6 +224,7 @@ test_pipeline = train_pipeline
 # ]
 common_data = dict(
         type=dataset_type,
+        gt_use_meanlayers_attn=gt_use_meanlayers_attn,
         with_velocity=True,
         classes=class_names,
         modality=input_modality,

@@ -38,10 +38,12 @@ class Detr3DTransformer(BaseModule):
                 wp_refine = None,
                 temporal = None,
                 route_mask = 0.0,
+                no_route = False,
                  **kwargs):
         
         super(Detr3DTransformer, self).__init__(**kwargs)
         self.route_mask = route_mask
+        self.no_route = no_route
         
         self.decoder = build_transformer_layer_sequence(decoder)
         self.embed_dims = self.decoder.embed_dims
@@ -144,7 +146,7 @@ class Detr3DTransformer(BaseModule):
             query = query + self.obj_type_emb.weight
 
         if self.use_bev_query:
-            if self.use_bev_query != 'no':
+            if not self.no_route:
                 # import pdb;pdb.set_trace()
                 bev_batch = np.stack([t['hdmap'] for t in img_metas])
                 bev_batch = query.new_tensor(bev_batch)
@@ -162,8 +164,8 @@ class Detr3DTransformer(BaseModule):
             query_pos = torch.cat([bev_pos.unsqueeze(1), query_pos],dim=1)
             query = torch.cat([bev_emb.unsqueeze(1), query],dim=1)
         
-        if self.use_route_query:
-            if self.use_route_query != 'no':
+        if self.use_route_query: # 总有route query占着位置
+            if not self.no_route:
                 # import pdb;pdb.set_trace()
                 if np.random.rand() < self.route_mask:
                     bs = len(img_metas)
