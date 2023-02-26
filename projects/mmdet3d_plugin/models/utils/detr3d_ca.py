@@ -102,6 +102,7 @@ class CrossAttn(BaseModule):
         
         if use_fv_sinpe:
             pe = PositionEmbeddingSine(num_pos_feats=256/2, normalize=True)
+            h, w = key.shape[-2:]
             key_pos = pe(key[0, 0:1]) # 取bs第1个, channels也不用传入太多
             key_pos = key_pos.flatten(2).permute(2,0,1) # c=1,256,h*w
             
@@ -113,7 +114,8 @@ class CrossAttn(BaseModule):
             k = key
             v = key
             
-        tgt2, attn_map = self.self_attn(q, k, v)
+        tgt2, attn_map = self.self_attn(q, k, v) # 8头返回平均情况
+        attn_map = attn_map.reshape(h, w)
         # tgt2: torch.Size([1, 2, 256])
         # attn_map: torch.Size([2, 1, 3712])
         tgt = tgt + self.dropout1(tgt2)
