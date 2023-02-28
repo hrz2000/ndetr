@@ -336,7 +336,7 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
     #     # import pdb;pdb.set_trace()
     #     print(len(gt_wp_attn),len(wp_attn))
     if gt_wp_attn is not None and wp_attn is not None:
-        assert len(gt_idxs) + 2 - 1 == len(gt_wp_attn) # 因为gt_idxs在可视化获取box的时候进行了前面补0，所以会多出一个
+        assert len(gt_idxs) + 2 == len(gt_wp_attn) # 因为gt_idxs在可视化获取box的时候进行了前面补0，所以会多出一个
         str1 = ",".join([f"{t*100:.0f}" for t in gt_wp_attn])
         str1_ = "ego,"+','.join([f"{t:.0f}" for i,t in enumerate(gt_idxs) if i>0])+',route'
         str2 = ",".join([f"{t*100:.0f}" for t in wp_attn])

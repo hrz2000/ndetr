@@ -14,8 +14,11 @@ timeout=60000
 unblock=False
 repetitions=1
 
-config="projects/configs/detr3d/new/bs_box_wpattn_global.py"
-checkpoint='work_dirs/bs_box_wpattn_global/2023-02-26_14:42:45/epoch_18.pth'
+config="projects/configs/detr3d/new/bs_box_wpattn_refine.py"
+checkpoint='pretrain/cross_attn.pth'
+
+# config="projects/configs/detr3d/new/bs_box_wpattn_ca_10w_alllayers.py"
+# checkpoint='work_dirs/bs_box_wpattn_ca_10w_alllayers/2023-02-26_23:49:13/epoch_18.pth'
 # config="projects/configs/detr3d/new/bs_box_wpattn_new.py"
 # checkpoint='pretrain/bugfix.pth'
 # config="projects/configs/detr3d/new/bs_box_wpattn_new_weights.py"
@@ -26,8 +29,8 @@ save_path='output/output/detr_eval_split' + f"/{name}/" + time.strftime('%Y-%m-%
 track='MAP'
 
 for idx in range(36):
-    if idx == 4:
-        break
+    # if idx == 4:
+    #     break
     # todolist = [8,24,28,30,31,32,33,34,35]
     # if idx not in todolist:
     #     continue

@@ -855,7 +855,7 @@ class Detr3DHead(DETRHead):
                     
                     if self.all_layers:
                         if self.gt_use_meanlayers_attn:
-                            gt_attnmap = gt_attnmap.mean(0,keep_dim=True)
+                            gt_attnmap = gt_attnmap.mean(0,keepdim=True)
                         else:
                             gt_attnmap = gt_attnmap[-1:] # torch.Size([1, 8, 14, 14]) 这是在拿最后一层监督预测的所有层，但是在数据处理的时候，可以处理成多层的平均值
                         new_map = new_map # torch.Size([6, 8, 14, 14])
