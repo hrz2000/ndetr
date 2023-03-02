@@ -6,6 +6,16 @@ from pathlib import Path
 from omegaconf import DictConfig, OmegaConf
 # os.environ['CUDA_VISIBLE_DEVICES']="1"
 import sys
+import torch
+import numpy as np
+import random
+
+seed=100
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
 
 # , version_base=None
 @hydra.main(config_path="../../carla_agent_files/config", config_name="config") 

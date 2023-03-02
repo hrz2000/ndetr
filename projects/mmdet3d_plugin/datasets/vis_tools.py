@@ -267,7 +267,7 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
     gt_bbox = gt_pts_bbox.get('boxes_3d', None)
     gt_wp_attn = gt_pts_bbox.get('wp_attn', None)
     gt_idxs = gt_pts_bbox.get('gt_idxs', None)
-    matched_idxs = pred_pts_bbox.get('matched_idxs', None)
+    match_map = pred_pts_bbox.get('match_map', None)
     pred_bbox = pred_pts_bbox.get('boxes_3d', None)
     wp_attn = pred_pts_bbox.get('wp_attn', None)
     
@@ -320,8 +320,8 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
                         # 第一个东西是对cls_emb的attn 错误
                         # 这个东西是和预测阈值的数量挂钩的，是过滤后的东西，倒是可以在前后拼接
                         # 这个+1没问题
-                    if matched_idxs is not None:
-                        draw.text((endx1+30+30, endy1), f"{int(matched_idxs[idx])}", fill='blue')
+                    if match_map is not None:
+                        draw.text((endx1+30+30, endy1), f"{int(match_map[idx])}", fill='blue')
                 else:
                     if gt_wp_attn is not None:
                         # gt_wp_attn比gt_idxs多一些，因为由对route的attn

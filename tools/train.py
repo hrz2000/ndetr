@@ -167,6 +167,13 @@ def main():
     elif cfg.get('work_dir', None) is None:
         # use config filename as default work_dir if cfg.work_dir is None
         cfg.work_dir = osp.join('./work_dirs', osp.splitext(osp.basename(args.config))[0])+ "/" + time.strftime('%Y-%m-%d_%H:%M:%S')
+    
+    if args.resume_from is not None:
+        cfg.work_dir = osp.dirname(args.resume_from)
+        cfg.log_config.hooks[-1].init_kwargs.resume = True
+    cfg.log_config.hooks[-1].init_kwargs.name = cfg.work_dir
+    
+    assert cfg.work_dir[:2] == './', "for wandb"
 
     if args.resume_from is not None:
         cfg.resume_from = args.resume_from

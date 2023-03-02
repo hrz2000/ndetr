@@ -38,6 +38,7 @@ from leaderboard.utils.statistics_manager_local import StatisticsManager
 from leaderboard.utils.route_indexer import RouteIndexer
 
 import pathlib
+seed = 100 # -1
 
 sensors_to_icons = {
     'sensor.camera.rgb':                    'carla_camera',
@@ -239,7 +240,10 @@ class LeaderboardEvaluator(object):
         CarlaDataProvider.set_traffic_manager_port(int(args.trafficManagerPort))
 
         self.traffic_manager.set_synchronous_mode(True)
-        self.traffic_manager.set_random_device_seed(int(args.trafficManagerSeed))
+        if seed == -1:
+            self.traffic_manager.set_random_device_seed(int(args.trafficManagerSeed))
+        else:
+            self.traffic_manager.set_random_device_seed(seed) # TODO
 
         # Wait for the world to be ready
         if CarlaDataProvider.is_sync_mode():
@@ -287,10 +291,14 @@ class LeaderboardEvaluator(object):
         self.statistics_manager.set_route(config.name, config.index)
         # Randomize during data collection.
         # Deterministic seed during evaluation.
-        if int(os.environ.get('DATAGEN', 0))==1:
-            CarlaDataProvider._rng = random.RandomState(seed=None)
+        if seed == -1:
+            if int(os.environ.get('DATAGEN', 0))==1:
+                print("use system time as seed")
+                CarlaDataProvider._rng = random.RandomState(seed=None)
+            else:
+                CarlaDataProvider._rng = random.RandomState(seed=config.index)
         else:
-            CarlaDataProvider._rng = random.RandomState(seed=config.index)
+            CarlaDataProvider._rng = random.RandomState(seed=seed)
 
         now = datetime.now()
         route_string = pathlib.Path(args.routes).stem + '_'

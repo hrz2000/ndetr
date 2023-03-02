@@ -9,6 +9,7 @@ import pyquaternion
 from nuscenes.utils.data_classes import Box as NuScenesBox
 import torch
 import matplotlib.pyplot as plt
+from tabulate import tabulate
 
 from mmdet3d.core import show_result
 from mmdet3d.core.bbox import Box3DMode, Coord3DMode, LiDARInstance3DBoxes
@@ -192,8 +193,10 @@ class CustomNuScenesDataset(Custom3DDataset):
         if self.debug: # TODO
             # import pdb;pdb.set_trace()
             # data_infos = data_infos[1185:1195]
-            data_infos = [data_infos[i] for i in [20,30,40,50,100,500,700,800,900,1200,1190]]
-            # data_infos = data_infos[1185:1300]
+            # data_infos = [data_infos[i] for i in [20,30,40,50,100,500,700,800,900,1200,1190]]
+            # data_infos = data_infos[1185:1200]
+            data_infos = data_infos[0:1]
+            pass
         elif self.in_test:
             # data_infos = data_infos[0:1210]
             # data_infos = data_infos[0:4083]
@@ -227,28 +230,29 @@ class CustomNuScenesDataset(Custom3DDataset):
                 lidar2img_rts.append(lidar2img_rt)
                 break
             
+        fv_path = image_paths[0]
         cam2imgs = lidar2img_rts
 
         plan=info['plan']
-        fv_path = image_paths[0]
-        topdown_path = fv_path.replace('rgb','topdown') # 's3://tr_plan_hrz/PlanT_data_1/int_l_s8_dataset/Routes_Town02_Scenario8/Town02_Scenario8_route11_12_27_21_51_10/topdown/0005.png'
-        # import pdb;pdb.set_trace()
+        
+        topdown_path = fv_path.replace('rgb','topdown')
         topdown = mmcv.imread(topdown_path)
 
-        hdmap = np.stack([
-            mmcv.imread(fv_path.replace('rgb','hdmap0'),'grayscale'), 
-            mmcv.imread(fv_path.replace('rgb','hdmap1'),'grayscale')], axis=0) # 其实保存的时候用pkl会更好一些
+        hdmap = np.stack([mmcv.imread(fv_path.replace('rgb','hdmap0'),'grayscale'), mmcv.imread(fv_path.replace('rgb','hdmap1'),'grayscale')], axis=0)
             
         attnmap_path = fv_path.replace('rgb', 'attnmap').replace('png','pkl')
-        # import pdb;pdb.set_trace()
-        attn_info = mmcv.load(attnmap_path, file_format='pkl') # dict_keys(['attn_map', 'input_idx', 'output_idx', 'output_disappear', 'output_label_path'])
-            
+        attn_info = mmcv.load(attnmap_path, file_format='pkl')
+        
+        info['cam2imgs'] = cam2imgs
+        info['attn_info'] = attn_info
+        info['img_filename'] = image_paths
+        info['topdown'] = topdown
+        
         ann_info = None
         if not self.test_mode:
-            ann_info = self.get_ann_info(index, cam2imgs, attn_info) # 这里面进行了过滤
+            ann_info = self.get_ann_info(index) # 这里面进行了过滤
 
         input_dict = dict(
-            # sample_idx=info['sample_idx'],
             sample_idx=fv_path,
             scenes=osp.dirname(image_paths[0]),
             pts_filename=info['lidar_path'],
@@ -265,45 +269,25 @@ class CustomNuScenesDataset(Custom3DDataset):
             attn_info=attn_info,
             gt_idxs=ann_info['gt_idxs'],
             attnmap=ann_info['attnmap'],
-            gt_pl_lack=ann_info['gt_pl_lack'],
+            wp_attn=ann_info['wp_attn'],
+            sort_idx=ann_info['sort_idx'],
             index=index,
         )
         
         return input_dict
 
-    def get_ann_info(self, index, cam2imgs, attn_info): # 只要保证经过这个东西之后，attn_weight和还是1就行
-        # get_data_info里面没有对gt_idxs等进行过滤处理
+    def get_ann_info(self, index):
         info = self.data_infos[index]
+        cam2imgs = info['cam2imgs']
+        attn_info = info['attn_info']
 
-        ## attn
-        attnmap = attn_info['attn_map'] # (8, 8, 42, 42)
-        ori_attnmap = copy.deepcopy(attnmap)
-        input_idx = attn_info['input_idx'] # 21
-        output_idx = attn_info['output_idx'] # 理论上inp和oup的idx是完全一样的
-        # 后面的0,1代表route的idx
-        assert len(input_idx) == len(output_idx)
-        output_disappear = attn_info['output_disappear']
-        
-        # TODO
-        
-        len_box_route = len(input_idx)
-        len_box = len(output_disappear) # 21
-        plant_gt_idxs = input_idx[:len_box] # bugfix：注意这里没有cls_emb
-        len_route = len_box_route - len_box
-        # 让预测跟着gt走就行
-        # init_box_num = len(info['gt_boxes'])
-        # boxes_id = list(range(init_box_num)) # TODO: 目前两个gt不一样，导致后面mask是不对的
-        # attnmap和plant_gt_idxs是一致的
-        # gt_idxs和其他是一致的
-        
         if self.use_valid_flag:
             mask = info['valid_flag']
         else:
             mask = info['num_lidar_pts'] > 0
         gt_bboxes_3d = info['gt_boxes'][mask] # (66, 9)
         gt_names_3d = info['gt_names'][mask] #类别名字
-        gt_idxs = info['gt_idxs'][mask] #类别名字
-        # boxes_id = np.array(boxes_id)[mask] # 必须是np才能用yes/no进行筛选
+        gt_idxs = info['gt_idxs'][mask]
         gt_labels_3d = []
         for cat in gt_names_3d:
             if cat in self.CLASSES:
@@ -311,135 +295,78 @@ class CustomNuScenesDataset(Custom3DDataset):
             else:
                 gt_labels_3d.append(-1)
         gt_labels_3d = np.array(gt_labels_3d)
-        
-        # the nuscenes box center is [0.5, 0.5, 0.5], we change it to be the same as KITTI (0.5, 0.5, 0)
         gt_bboxes_3d = LiDARInstance3DBoxes(gt_bboxes_3d, box_dim=gt_bboxes_3d.shape[-1])
         ego_box_3d = gt_bboxes_3d[0]
-
+        
+        # 进行filter=================================        
         cam2img = cam2imgs[0]
         valid_mask = filter_invisible(gt_bboxes_3d, self.img_shape, cam2img) # 对gt也进行了这样的处理，至少没有了ego
         gt_bboxes_3d = gt_bboxes_3d[valid_mask]
         gt_labels_3d = gt_labels_3d[valid_mask]
         gt_names_3d = gt_names_3d[valid_mask]
         gt_idxs = gt_idxs[valid_mask]
-        # boxes_id = boxes_id[valid_mask]
         
-        # 这个时候找gt_idxs和plant_gt_idxs的共同之处
-        pl_box_idxs_raw = []
-        for idx in gt_idxs:
-            # import pdb;pdb.set_trace()
-            idx_pl = np.where(plant_gt_idxs==idx)[0] # 获得了5
-            if idx_pl.shape[0] == 0:
-                pl_box_idxs_raw.append(-1)
-            else:
-                idx_pl = idx_pl.item()
-                pl_box_idxs_raw.append(idx_pl) # 前面有wp_emb
-                # pl_box_idxs_raw.append(idx_pl+1) # 前面有wp_emb
+        # attn计算 ==================================
+        attnmap = attn_info['attn_map'] # (8, 8, 42, 42)
+        input_idx = attn_info['input_idx']# 后面的0,1代表route的idx
+        output_disappear = attn_info['output_disappear']
         
-        # import pdb;pdb.set_trace()
-        # pl_exists_idxs = np.array(pl_new_idxs)[pl_new_idxs!=-1][0] # pl有我没有的先不管
-        pl_box_idxs = np.array(pl_box_idxs_raw)
+        len_box_route = len(input_idx)
+        len_box = len(output_disappear) # 21
+        plant_gt_idxs = input_idx[:len_box] # bugfix：注意这里没有cls_emb
+        len_route = len_box_route - len_box
         
-        gt_pl_lack = pl_box_idxs==-1
+        all_wp_attn = copy.deepcopy(attnmap[:,:,0,:1+len_box+1].mean(0))
+                
+        sort_idx = get_sort_idx(plant_gt_idxs, gt_idxs) # gt_idxs在plant_idx中的位置，我们需要拿出plant位置位置
+        valid_mask = np.array(sort_idx) != -2 # 行人等plant没有的东西
+        sort_idx = [t for t in sort_idx if t != -2]
+        # TODO 增加行人等elem
         
-        # if gt_pl_lack.sum() > 0:
+        # if -2 in sort_idx:
         #     import pdb;pdb.set_trace()
         
-        # import pdb;pdb.set_trace()
-        # gt_idxs: [1501, 1510, 1549, 1600, 1603, 1674, 1706, 1716, 1732, 1736]
-        #           [1,     3,   6,    9, 10, 16, 18, 19, 20, 21]
+        gt_bboxes_3d = gt_bboxes_3d[valid_mask]
+        gt_labels_3d = gt_labels_3d[valid_mask]
+        gt_names_3d = gt_names_3d[valid_mask]
+        gt_idxs = gt_idxs[valid_mask]
         
-        # attnmap: array([0.00086509, 0.00366808, 0.02288333, 0.03979345, 0.04145063, 0.24237308, 0.04866292, 0.01946599, 0.03253264, 0.02445563,
         
-        if len_box_route==1:
-            pl_map_idxs = [0, *(pl_box_idxs.tolist()), len_box_route]
-            gt_pl_lack = [False, *gt_pl_lack, False]
-        else:
-            pl_map_idxs = [0, *(pl_box_idxs.tolist()), len_box_route-1] # len_box_route, 目前只用第一个route
-            gt_pl_lack = [False, *gt_pl_lack, False]
-        
-        attnmap = attnmap[:,:,pl_map_idxs][:,:,:,pl_map_idxs] # (8, 8, 13, 13)
-        # 现在attnmap是1+box+route+1
-        # gt_idxs于此无关，我们希望是一样的
-        # 如果想修改成和gt一样的格式，需要把-1的位置给填充成别的东西
-        # import pdb;pdb.set_trace()
-        # 第二个维度是gt_idxs，后者是yes or no，其实后者就行
-        attnmap[:,:,gt_pl_lack][:,:,:,gt_pl_lack] = -1 # 完全按照gt_idx顺序，前面多一个cls_emb，后面多route
-        
-        # assert attnmap.shape[-1] == 1 + len(gt_idxs) + len_route
-        assert attnmap.shape[-1] == 1 + len(gt_idxs) + 1
-        
-        # 实际上不需要attnmap，wp_attn
-        
-        show_all_layers_mean=True
-        if show_all_layers_mean: # 目前仅用作可视化
-            wp_attn = attnmap[:,:,0,:].mean(0) # 所有layers
-        else:
-            wp_attn = attnmap[-1,:,0,:] # wp对所有（wp、box、route）第一个head
-        # wp_attn = attnmap[-1,:,0,:].mean(0) # wp对所有（wp、box、route）
-        # 我们需要把wp_attn补全到和gt_idxs一样的格式
-        # 对gt可视化的时候，前面concat上了ego
-        # 第一个box其实是在idx=2的位置开始
+        sort_idx = [t+1 for t in sort_idx] # 前面有个cls_emb，然后是对应的
+        wp_attn = all_wp_attn[:,[0,*sort_idx,-1]]
     
         anns_results = dict(
             gt_bboxes_3d=gt_bboxes_3d,
             gt_labels_3d=gt_labels_3d,
             gt_names=gt_names_3d,
-            gt_idxs=gt_idxs,
-            wp_attn=wp_attn,
             attnmap=attnmap,
-            gt_pl_lack=gt_pl_lack,
             ego_box_3d=ego_box_3d,
-            
-            ori_attnmap=ori_attnmap,
+            #########################
             len_box_route=len_box_route,
-            len_box=len_box
-        )
-        return anns_results
-
-    def get_gt_pts_bbox(self, index): # 为了便于可视化的gt信息
-        data_info = self.get_data_info(index)
-        anns_results = data_info['ann_info']
-        gt_bboxes_3d = anns_results['gt_bboxes_3d']
-        ego_box_3d = anns_results['ego_box_3d']
-        gt_labels_3d = anns_results['gt_labels_3d'] # 这里是没有过滤的
-        gt_names = anns_results['gt_names']
-        gt_idxs = anns_results['gt_idxs']
-        wp_attn = anns_results['wp_attn']
-        
-        cam2img = data_info['cam2imgs'][0]
-        imgpath = data_info['img_filename'][0] # TODO
+            len_box=len_box,
             
-        gt_pts_bbox = dict(
-            # boxes_3d=LiDARInstance3DBoxes.cat([ego_box_3d, gt_bboxes_3d]),
-            # scores_3d=np.ones_like([1,*gt_labels_3d]),
-            # labels_3d=np.array([1,*gt_labels_3d]),
-            # gt_idxs=np.array([0,*gt_idxs]), # 第一个是ego
             boxes_3d=gt_bboxes_3d,
-            scores_3d=gt_labels_3d,
+            scores_3d=np.ones_like(gt_labels_3d),
             labels_3d=gt_labels_3d,
             gt_idxs=gt_idxs,
+            
             wp_attn=wp_attn,
+            sort_idx=sort_idx,
+            all_wp_attn=all_wp_attn,
             
-            ori_attnmap=anns_results['ori_attnmap'],
-            len_box_route=anns_results['len_box_route'],
-            len_box=anns_results['len_box'],
-            
-            attrs_3d=data_info['plan']['wp'],
-            tp=data_info['plan']['tp'],
-            light=data_info['plan']['light'],
-            command=data_info['plan']['command'],
-            route=data_info['plan']['route'],
+            attrs_3d=info['plan']['wp'],
+            tp=info['plan']['tp'],
+            light=info['plan']['light'],
+            command=info['plan']['command'],
+            route=info['plan']['route'],
             route_wp=None,
             iscollide=None,
-            cam2img=cam2img,
-            imgpath=imgpath,
-            # gt_bev=data_info['topdown_path']
-            # gt_bev=data_info['topdown_path']
-            topdown=data_info['topdown'],#可视化的时候要用
+            cam2img=info['cam2imgs'][0],
+            imgpath=info['img_filename'][0],
+            topdown=info['topdown'], #可视化的时候要用
             hdmap=None
         )
-        return gt_pts_bbox
+        return anns_results
 
     def _format_bbox(self, results, jsonfile_prefix=""):
         """Convert the results to the standard format.
@@ -668,7 +595,8 @@ class CustomNuScenesDataset(Custom3DDataset):
         for i, result in enumerate(batch_results):
             pts_bbox = result['pts_bbox']
             end_idx = pts_bbox['img_metas']['index']
-            gt_results.append(dict(pts_bbox=self.get_gt_pts_bbox(end_idx)))
+            info = self.get_data_info(end_idx) # 里面会往info写
+            gt_results.append(dict(pts_bbox=self.get_ann_info(end_idx)))
         
         if self.use_det_metric and 'boxes_3d' in batch_results[0]['pts_bbox']:
             result_files, tmp_dir = self.format_results(batch_results, jsonfile_prefix)
@@ -696,38 +624,35 @@ class CustomNuScenesDataset(Custom3DDataset):
         # 对不同batch的loss进行平均
         hardcase = {}
         loss_dict = {}
-        gt_max_obj_weight_list = []
-        max_obj_weight_list = []
-        gt_route_weight_list = []
-        route_weight_list = []
-        gt_mean_obj_weight_list = []
-        mean_obj_weight_list = []
+        info_list = []
+        # gt_ego, gt_mean, gt_max, gt_route, pr..
         for idx_r, batch_i_result in enumerate(batch_results): # 这个是loss函数返回的结果
-            pts_bbox = batch_i_result['pts_bbox'] # dict_keys(['boxes_3d', 'scores_3d', 'labels_3d', 'attrs_3d', 'matched_idxs', 'refine_wp', 'route_wp', 'iscollide', 'fut_boxes', 'attnmap', 'wp_attn', 'img_metas']) (2,)
+            pts_bbox = batch_i_result['pts_bbox']
+            gt_ptx_bbox = gt_results[idx_r]['pts_bbox']
             
-            route_weight, mean_obj_weight, max_obj_weight = get_weight(pts_bbox)
-            gt_route_weight, gt_mean_obj_weight, gt_max_obj_weight = get_weight(gt_results[idx_r]['pts_bbox'])
+            gt_box = gt_results[idx_r]['pts_bbox']
+            # ori_attnmap = gt_box['ori_attnmap']
+            # ori_attnmap = ori_attnmap[:,:,0:1,:]
+            # len_box_route = gt_box['len_box_route']
+            # len_box = gt_box['len_box']
+            # len_gt = len(gt_box['gt_idxs'])
             
-            gt_box = gt_results[idx_r]['pts_bbox'] # (8, 8, 50, 50) dict_keys(['boxes_3d', 'scores_3d', 'labels_3d', 'gt_idxs', 'wp_attn', 'ori_attnmap', 'len_box_route', 'len_box', 'attrs_3d', 'tp', 'light', 'command', 'route', 'route_wp', 'iscollide', 'cam2img', 'imgpath', 'topdown', 'hdmap'])
-            ori_attnmap = gt_box['ori_attnmap']
-            ori_attnmap = ori_attnmap[:,:,0:1,:]
-            len_box_route = gt_box['len_box_route']
-            len_box = gt_box['len_box']
-            len_gt = len(gt_box['gt_idxs'])
-            # wp_attn应该是(8head,1+1+1)维度
-            
-            gt_max_obj_weight_list.append(gt_max_obj_weight)
-            gt_mean_obj_weight_list.append(gt_mean_obj_weight)
-            max_obj_weight_list.append(max_obj_weight.item())
-            mean_obj_weight_list.append(mean_obj_weight.item())
-            gt_route_weight_list.append(gt_route_weight)
-            route_weight_list.append(route_weight.item())
+            info_list.append(np.stack([
+                get_weight(gt_ptx_bbox['wp_attn']), 
+                get_weight(pts_bbox['wp_attn']), 
+                get_all_weight_pred(pts_bbox['all_wp_attn']), 
+                get_all_weight_gt(gt_ptx_bbox['all_wp_attn'])]))
             
             result = batch_i_result['loss']
-            attnmap_loss = result['attnmap_loss']
+            # attnmap_loss = result['attnmap_loss']
             wp_loss = result['wp']
             iscollide = pts_bbox['iscollide']
-            if wp_loss > 1.5 and not iscollide:
+            
+            all_save = True
+            if all_save == False:
+                if wp_loss > 1.5 and not iscollide:
+                    hardcase[idx_r] = wp_loss
+            else:
                 hardcase[idx_r] = wp_loss
                 
             for k in result:
@@ -737,20 +662,18 @@ class CustomNuScenesDataset(Custom3DDataset):
                 if idx_r == len(batch_results) - 1:
                     loss_dict[k] /= len(batch_results)
         results_dict.update(loss_dict)
+
+        info_list = np.stack(info_list) # bs, x, 4
+        info_list = info_list.mean(0) # x, 4
         
-        gt_max_obj_weight_list = np.array(gt_max_obj_weight_list)
-        max_obj_weight_list = np.array(max_obj_weight_list)
-        gt_route_weight_list = np.array(gt_route_weight_list)
-        route_weight_list = np.array(route_weight_list)
-        gt_mean_obj_weight_list = np.array(gt_mean_obj_weight_list)
-        mean_obj_weight_list = np.array(mean_obj_weight_list)
-        
-        print(gt_max_obj_weight_list.mean())
-        print(max_obj_weight_list.mean())
-        print(gt_route_weight_list.mean())
-        print(route_weight_list.mean())
-        print(gt_mean_obj_weight_list.mean())
-        print(mean_obj_weight_list.mean())
+        tab = {"Name": ["ego", "mean", "max", "route", "hdmap", "sum", "box_num"],
+                "gt": info_list[0].tolist(),
+                "gt_all": info_list[3].tolist(),
+                "pr": info_list[1].tolist(),
+                "pr_all": info_list[2].tolist(),}
+
+        print()
+        print(tabulate(tab, headers="keys", tablefmt="grid", floatfmt=".2f"))
         
         if self.vis:
             self.show_ndetr(batch_results, gt_results, self.vis_dir, show=self.vis, pipeline=pipeline, hardcase=hardcase)
@@ -1155,11 +1078,63 @@ def rel2s3(string):
     #     return f"s3://tr_plan_hrz/l6_dataset/Routes_l6_dataset/{'/'.join(string.split('/')[4:])}"
     return f"s3://tr_plan_hrz_2/{'/'.join(string.split('/')[1:])}"
 
-def get_weight(pts_bbox):
-    wp_attn = pts_bbox['wp_attn'] # torch.Size([8, 4]) 8个头
-    meanhead_attn = wp_attn.mean(0)
-    route_weight = meanhead_attn[-1]
-    self_weight = meanhead_attn[0]
-    max_obj_weight = meanhead_attn[0:-1].max()
-    mean_obj_weight = meanhead_attn[0:-1].mean()
-    return route_weight, mean_obj_weight, max_obj_weight
+def get_weight(wp_attn): # torch.Size([8, 4]) 8个头
+    if isinstance(wp_attn, torch.Tensor):
+        wp_attn = wp_attn.cpu().detach().numpy()
+    wp_attn = wp_attn.mean(0)
+    route_weight = wp_attn[-1]
+    self_weight = wp_attn[0]
+    if len(wp_attn) == 2:
+        print('warning: len(wp_attn) == 2')
+        max_obj_weight, mean_obj_weight = 0,0
+    else:
+        max_obj_weight = wp_attn[1:-1].max()
+        mean_obj_weight = wp_attn[1:-1].mean()
+    all_weight = wp_attn.sum()
+    lenbox = len(wp_attn) - 2
+    return np.array([self_weight, mean_obj_weight, max_obj_weight, route_weight, 0, all_weight, lenbox])
+
+def get_all_weight_pred(wp_attn): # torch.Size([8, 4]) 8个头
+    if isinstance(wp_attn, torch.Tensor):
+        wp_attn = wp_attn.cpu().detach().numpy()
+    wp_attn = wp_attn.mean(0)
+    self_weight = wp_attn[0]
+    route_weight = wp_attn[1]
+    hdmap_weight = wp_attn[2]
+    max_obj_weight = wp_attn[3:].max()
+    mean_obj_weight = wp_attn[3:].mean()
+    all_weight = wp_attn.sum()
+    lenbox = len(wp_attn) - 3
+    return np.array([self_weight, mean_obj_weight, max_obj_weight, route_weight, hdmap_weight, all_weight, lenbox])
+
+def get_all_weight_gt(wp_attn): # torch.Size([8, 4]) 8个头
+    if isinstance(wp_attn, torch.Tensor):
+        wp_attn = wp_attn.cpu().detach().numpy()
+    wp_attn = wp_attn.mean(0)
+    self_weight = wp_attn[0]
+    route_weight = wp_attn[-1]
+    max_obj_weight = wp_attn[1:-1].max()
+    mean_obj_weight = wp_attn[1:-1].mean()
+    all_weight = wp_attn.sum()
+    lenbox = len(wp_attn) - 2
+    return np.array([self_weight, mean_obj_weight, max_obj_weight, route_weight, 0, all_weight, lenbox])
+
+def get_sort_idx(plant_gt_idxs, gt_idxs):
+    is_np = isinstance(plant_gt_idxs, np.ndarray)
+    pl_box_idxs_raw = []
+    for idx in gt_idxs:
+        if is_np:
+            idx_pl = np.where(plant_gt_idxs==idx)[0]
+        else:
+            idx_pl = torch.where(plant_gt_idxs==idx)[0]
+        if idx_pl.shape[0] == 0:
+            if is_np:
+                pass # 这个是预处理时，发现plant里面没有对应的gt，应该在此处不监督，或者对应监督信号为0，认为不重要(跟删掉这个gt差不多的意思, 是行人！！)
+                pl_box_idxs_raw.append(-2)
+            else:
+                assert False # 这个在计算loss时
+        else:
+            idx_pl = idx_pl.item()
+            pl_box_idxs_raw.append(int(idx_pl))
+            
+    return pl_box_idxs_raw # 得到了每个gt_idxs，在plant_idx中的位置

@@ -252,6 +252,8 @@ class Detr3D(MVXTwoStageDetector):
             loss_inputs = [img_metas, gt_bboxes_3d, gt_labels_3d, outs]
             losses, new_gt_idxs_list_layers = self.pts_bbox_head.loss(*loss_inputs)
             outs['new_gt_idxs_list_layers'] = new_gt_idxs_list_layers ## 放到这里了
+            outs['all_'] = new_gt_idxs_list_layers ## 放到这里了
+            # outs['new_gt_idxs_list_layers'] = new_gt_idxs_list_layers ## 放到这里了
         else:
             losses = {}
         return dict(

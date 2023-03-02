@@ -301,7 +301,7 @@ class Detr3DTransformer(BaseModule):
         # decoder
         query = query.permute(1, 0, 2)
         query_pos = query_pos.permute(1, 0, 2)
-        inter_states, inter_references, inter_references2, inter_attnmap = self.decoder(
+        inter_states, inter_references, inter_references2, all_attnmap = self.decoder(
             query=query,
             key=None,
             value=mlvl_feats,
@@ -323,7 +323,7 @@ class Detr3DTransformer(BaseModule):
 
         inter_references_out = inter_references
         inter_references_out2 = inter_references2
-        return inter_states, init_reference_out, inter_references_out, init_reference_out2, inter_references_out2, inter_attnmap
+        return inter_states, init_reference_out, inter_references_out, init_reference_out2, inter_references_out2, all_attnmap
 
 # class QueryInteractionBase(nn.Module):
 #     def __init__(self, args, dim_in, hidden_dim, dim_out):

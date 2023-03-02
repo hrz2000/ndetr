@@ -8,8 +8,9 @@ import numpy as np
 import torch.nn.functional as F
 from mmcv.cnn import Linear, bias_init_with_prob
 from mmcv.runner import force_fp32
+from projects.mmdet3d_plugin.datasets.nuscenes_dataset import get_sort_idx
                         
-from mmdet.core import (multi_apply, multi_apply, reduce_mean)
+from mmdet.core import (multi_apply, reduce_mean)
 from mmdet.models.utils.transformer import inverse_sigmoid
 from mmdet.models import HEADS
 from mmdet.models.dense_heads import DETRHead
@@ -443,7 +444,9 @@ class Detr3DHead(DETRHead):
             batch_npred_bbox=batch_npred_bbox,
         )
 
-        hs, init_reference, inter_references, init_reference2, inter_references2, inter_attnmap = outputs
+        hs, init_reference, inter_references, init_reference2, inter_references2, all_attnmap = outputs
+        # all_attnmap: torch.Size([1, 6, 8, 53, 53])
+        all_attnmap = all_attnmap.permute(1,0,2,3,4)
         hs = hs.permute(0, 2, 1, 3) # ->torch.Size([6, bs=6, num_queries, 256])
         
         if only_query:
@@ -495,7 +498,7 @@ class Detr3DHead(DETRHead):
         refine_wp_layers = torch.stack(refine_wp_layers) if self.wp_refine else [None]*len(outputs_classes) # torch.Size([6, 2, 4, 2])
         
         outs=dict(all_cls_scores=outputs_classes, all_bbox_preds=outputs_coords)
-        batch_pts_boxes = self.get_bboxes(outs=outs, img_metas=img_metas, for_aux_outs=True)
+        batch_pts_boxes = self.get_only_bboxes(outs=outs, img_metas=img_metas)
         # 这里会获取一次box
         
         # 计算未来时刻的box位置、预测waypoint
@@ -538,8 +541,8 @@ class Detr3DHead(DETRHead):
             
             'iscollide': iscollide,
             'tp': tp_batch,
-            'inter_attnmap': inter_attnmap,
-            'attnmap': inter_attnmap,
+            'all_attnmap': all_attnmap,
+            'attnmap': all_attnmap,
         }
         # 还会根据这些信息再次获取box
         return outs, hs
@@ -776,7 +779,6 @@ class Detr3DHead(DETRHead):
         iscollide = outs['iscollide']
         route_wp = outs['route_wp']
         tp = outs['tp']
-        inter_attnmap = outs['inter_attnmap'] # torch.Size([32, 6, 8, 53, 53])
 
         num_dec_layers = len(all_cls_scores)
         if isinstance(gt_labels_list[0], DC):
@@ -797,7 +799,7 @@ class Detr3DHead(DETRHead):
             gt_bboxes_ignore for _ in range(num_dec_layers)
         ]
 
-        losses_cls, losses_bbox, new_gt_idxs_list_layers = multi_apply(
+        losses_cls, losses_bbox, match_map = multi_apply(
             self.loss_single, all_cls_scores, all_bbox_preds,
             all_gt_bboxes_list, all_gt_labels_list, all_gt_idxs_list,
             all_gt_bboxes_ignore_list) # 只在计算loss的时候才进行了new_gt_idxs的计算，怎么把它放到box里面里面
@@ -824,99 +826,43 @@ class Detr3DHead(DETRHead):
         
         self.penalty(pred_wp, route_wp, iscollide, tp, losses, head=self)
         
-        # 仿真的时候就不要再计算loss了
         if self.loss_weights.loss_attnmap != 0:
-            if 'attn_info' in img_metas[0]:
+            if 'attn_info' in img_metas[0]: # 仿真测试时候没有
+                all_attnmap = outs['all_attnmap'] # torch.Size([6, batch, 8, 53, 53])
                 loss_attnmap_list = []
-                # inter_attnmap = outs['inter_attnmap'] # torch.Size([32, 6, 8, 53, 53])
-                for batch_id in range(len(inter_attnmap)):
-                    
-                    last_layer_batchi_gt = new_gt_idxs_list_layers[-1][batch_id].to(torch.int) # 先是layers，然后是batch，然后是50个元素的tensor表示-1/具体的obj_idx是谁
-                    # TODO: 在监督所有层的时候，有不对应的问题（不同层的匹配结果不一致）
-                    
-                    gt_idxs = gt_idxs_list[batch_id]
-                    attnmap = inter_attnmap[batch_id] # torch.Size([6, 8, 53, 53])
-                    
-                    gt_attnmap = attnmap.new_tensor(img_metas[batch_id]['attnmap'])
-                    assert gt_attnmap.shape[-1] == 1 + len(gt_idxs) + 1
-                    
-                    # 按照gt_idxs对预测的attn分数进行排序
-                    sorted_idxs = []
-                    for idx in gt_idxs:
-                        pred_idx = torch.where(last_layer_batchi_gt==idx)[0]
-                        assert pred_idx.shape[0] != 0
-                        this_obj_idx = pred_idx.item() 
-                        assert this_obj_idx <= 49 # 50个query
-                        sorted_idxs.append(this_obj_idx+3) # 这里假定了extra_query为3
-                    sorted_idxs = [self.wp_query_pos, *sorted_idxs, self.route_query_pos]
-                    
-                    new_map = attnmap[:,:,sorted_idxs][:,:,:,sorted_idxs]
-                    # torch.Size([6, 8, 12, 12])
-                    
-                    if self.all_layers:
-                        if self.gt_use_meanlayers_attn:
-                            gt_attnmap = gt_attnmap.mean(0,keepdim=True)
-                        else:
-                            gt_attnmap = gt_attnmap[-1:] # torch.Size([1, 8, 14, 14]) 这是在拿最后一层监督预测的所有层，但是在数据处理的时候，可以处理成多层的平均值
-                        new_map = new_map # torch.Size([6, 8, 14, 14])
-                    else: # 只要最后一层
-                        gt_attnmap = gt_attnmap[-1:]
-                        new_map = new_map[-1:]
-                    
-                    gt_pl_lack = img_metas[batch_id]['gt_pl_lack']
-                    gt_pl_have = np.array(gt_pl_lack) == False
-                    
-                    # pred对应没有的也不监督
-                    # TODO: 可以区分一下map监督还是list一行监督
-                    gt_attnmap_filter = gt_attnmap[:,:,gt_pl_have][:,:,:,gt_pl_have]
-                    pred_attnmap_filter = new_map[:,:,gt_pl_have][:,:,:,gt_pl_have]
-                    
-                    if self.use_all_map:
-                        # assert False
-                        pass
-                    else:
-                        gt_attnmap_filter = gt_attnmap_filter[:,:,0:1,:] # torch.Size([1, 8, 1, 10])
-                        pred_attnmap_filter = pred_attnmap_filter[:,:,0:1,:] # torch.Size([1, 8, 1, 10])
-
-                    if self.no_route:
-                        gt_attnmap_filter = gt_attnmap_filter[...,:-1]
-                        pred_attnmap_filter = pred_attnmap_filter[...,:-1]
-                        
-                    if self.use_kl or self.use_focal:
-                        pass
-                    else: # 进行规范化
-                        gt_attnmap_filter_sum1 = gt_attnmap_filter.sum(-1)[...,None] + 0.00001
-                        gt_attnmap_filter = (gt_attnmap_filter / gt_attnmap_filter_sum1)
-                        
-                        pred_attnmap_filter_sum1 = pred_attnmap_filter.sum(-1)[...,None] + 0.00001
-                        pred_attnmap_filter = (pred_attnmap_filter / pred_attnmap_filter_sum1)
-                    
-                    n_pred_layer = pred_attnmap_filter.shape[0] # torch.Size([1, 8, 3, 3])
-                    gt_attnmap_filter = gt_attnmap_filter.repeat(n_pred_layer,1,1,1)
-                    
-                    if self.use_kl:
-                        kl_loss = nn.KLDivLoss(log_target=True)
-                        log_target = F.log_softmax(gt_attnmap_filter, dim=-1)
-                        log_pred = F.log_softmax(pred_attnmap_filter, dim=-1)
-                        loss_attnmap = kl_loss(log_pred, log_target)
-                    elif self.use_focal:
-                        loss_attnmap = sigmoid_focal_loss(pred_attnmap_filter, gt_attnmap_filter)
-                    elif self.use_mmd:
-                        gt_attnmap_filter = einops.rearrange(gt_attnmap_filter, "layers heads num_sup n_elem->(layers heads num_sup) n_elem")
-                        pred_attnmap_filter = einops.rearrange(pred_attnmap_filter, "layers heads num_sup n_elem->(layers heads num_sup) n_elem")
-                        loss_attnmap = mmd_rbf(gt_attnmap_filter, pred_attnmap_filter)
-                    elif self.use_l2:
-                        loss_attnmap = F.mse_loss(gt_attnmap_filter, pred_attnmap_filter) # layer层面
-                    else:
-                        loss_attnmap = F.l1_loss(gt_attnmap_filter, pred_attnmap_filter) # layer层面
-                            
-                    loss_attnmap = torch.nan_to_num(loss_attnmap) ## TODO
-                    loss_attnmap_list.append(loss_attnmap)
-
+                for i in range(len(img_metas)):
+                    loss_attnmap_list.append(self.get_single_attnloss(
+                        match_map[-1][i], gt_idxs_list[i], all_attnmap[:,i], img_metas[i]))
                 loss_attnmap = torch.stack(loss_attnmap_list).mean()
                 losses.update({'attnmap_loss': loss_attnmap*self.loss_weights.loss_attnmap})
                 
-        return losses, new_gt_idxs_list_layers
+        return losses, match_map
+    
+    def get_single_attnloss(self, match_map, gt_idxs, attnmap, img_metas):
+        gt_wp_attn = attnmap.new_tensor(img_metas['wp_attn']) # torch.Size([8, 6])
+        gt_wp_attn = gt_wp_attn[None].repeat(len(attnmap), 1, 1)
+        
+        # 按照gt_idxs对预测的attn分数进行排序
+        sorted_idxs = get_sort_idx(match_map, gt_idxs)
+        other_idxs = [t for t in range(50) if t not in sorted_idxs]
+        other_idxs = [t+self.extra_query for t in other_idxs]
+        other_idxs = [2, *other_idxs] # hdmap
+        sorted_idxs = [t+self.extra_query for t in sorted_idxs]
+        sorted_idxs = [self.wp_query_pos, *sorted_idxs, self.route_query_pos]
+        
+        pred_wp_attn_useful = attnmap[:,:,0,sorted_idxs]
+        pred_wp_attn_unuseful = attnmap[:,:,0,other_idxs]
+        
+        pred_wp_attn = torch.cat([pred_wp_attn_useful, pred_wp_attn_unuseful], dim=-1)
+        gt_wp_attn = torch.cat([gt_wp_attn, torch.zeros_like(pred_wp_attn_unuseful)], dim=-1)
+        
+        pred_wp_attn = pred_wp_attn.softmax(-1)
+        gt_wp_attn = gt_wp_attn.softmax(-1)
+
+        loss_attnmap = F.l1_loss(pred_wp_attn, gt_wp_attn)
+        
+        # attnmap[:,:,0,sorted_idxs] = gt_wp_attn[None] # 这句话检查是否对应
+        return loss_attnmap
     
     def loss_update(self, losses, losses_x, type_str):
         # TODO: 判断losses的shape
@@ -1031,20 +977,8 @@ class Detr3DHead(DETRHead):
             colli = img_and.sum() > 0
             batch_bool.append(colli)
         return torch.tensor(batch_bool).to('cuda')
-
-    @force_fp32(apply_to=('preds_dicts'))
-    def get_bboxes(self, outs, img_metas, rescale=False, no_filter=False, for_aux_outs=False):
-        # from datetime import timedelta
-        # import wandb
-        # from wandb import AlertLevel
-
-        # wandb.alert(
-        #     title='Low accuracy',
-        #     text=f'xxxtest',
-        #     level=AlertLevel.WARN,
-        #     wait_duration=timedelta(minutes=5)
-        # )
-        
+    
+    def get_only_bboxes(self, outs, img_metas, rescale=False, no_filter=False):
         preds_dicts = self.bbox_coder.decode(outs, no_filter=no_filter)
         # [dict_keys(['bboxes', 'scores', 'labels']),...]
         num_samples = len(preds_dicts)
@@ -1056,30 +990,33 @@ class Detr3DHead(DETRHead):
             bboxes = img_metas[i]['box_type_3d'](bboxes, 9)
             scores = preds['scores'] # torch.Size([300])
             labels = preds['labels'] # torch.Size([300])
-            wp_attn = preds['wp_attn'] # torch.Size([300])
-            matched_idxs = preds['matched_idxs']
-            ret_list.append([bboxes, scores, labels, wp_attn, matched_idxs])
-        
-        if for_aux_outs:
-            return [dict(
+            ret_list.append(dict(
                 boxes_3d=bboxes,
                 scores_3d=scores,
-                labels_3d=labels,
-                wp_attn=wp_attn,
-                matched_idxs=matched_idxs,
-                # attrs_3d=outs['all_wp_preds'][-1][i] # 每个bs的最后一层
-            ) for i, (bboxes, scores, labels, wp_attn, matched_idxs) in enumerate(ret_list)]
-            # wp_attn都保留了头
+                labels_3d=labels))
+        return ret_list
         
+    @force_fp32(apply_to=('preds_dicts'))
+    def get_bboxes(self, outs, img_metas, rescale=False, no_filter=False):
+        # outs: dict_keys(['all_cls_scores', 'all_bbox_preds', 'refine_wp', 'enc_cls_scores', 'enc_bbox_preds', 'all_wp_preds', 'fut_boxes', 'route_wp', 'iscollide', 'tp', 'all_attnmap', 'new_gt_idxs_list_layers'])
+        # torch.Size([6, 1, 8, 53, 53])
+        preds_dicts = self.bbox_coder.decode(outs, no_filter=no_filter)
+        # [dict_keys(['bboxes', 'scores', 'labels']),...]
+        num_samples = len(preds_dicts)
         bbox_results = []
-        for i, (bboxes, scores, labels, wp_attn, matched_idxs) in enumerate(ret_list):
-            attrs = None
-            refine_wp = None
-            route_wp = None
-            iscollide = None
-            fut_boxes = None
-            attnmap = None
-            if outs['all_wp_preds'] is not None:
+        
+        for i in range(num_samples):
+            preds = preds_dicts[i]
+            bboxes = preds['bboxes'] # torch.Size([300, 9])
+            bboxes[:, 2] = bboxes[:, 2] - bboxes[:, 5] * 0.5
+            bboxes = img_metas[i]['box_type_3d'](bboxes, 9)
+            scores = preds['scores'] # torch.Size([300])
+            labels = preds['labels'] # torch.Size([300])
+            select_idx = preds['select_idx'].cpu().detach().numpy() + self.extra_query
+            wp_attn = outs['all_attnmap'][:,i].mean(0)[:,0,[0,*select_idx,1]]
+            all_wp_attn = outs['all_attnmap'][:,i].mean(0)[:,0]
+            
+            if outs['all_wp_preds'] is not None: # torch.Size([6, 1, 4, 2])
                 attrs=outs['all_wp_preds'][-1][i].cpu() # 最后一层的第i个batch
             if outs['refine_wp'] is not None:
                 refine_wp=outs['refine_wp'][-1][i].cpu() # 最后一层的第i个batch
@@ -1089,22 +1026,22 @@ class Detr3DHead(DETRHead):
                 iscollide=outs['iscollide'][i].cpu() # bool
             if outs['fut_boxes'] is not None:
                 fut_boxes=outs['fut_boxes'][i].cpu()
-            if outs['attnmap'] is not None:
-                attnmap=outs['attnmap'][-1][i].cpu() # torch.Size([8, 53, 53])
-                attnmap=torch.cat([t for t in attnmap], axis=1) # concat起来用于可视化
+            # if outs['all_attnmap'] is not None:
+            #     attnmap=outs['all_attnmap'][-1][i].cpu() # torch.Size([8, 53, 53])
+            #     attnmap=torch.cat([t for t in attnmap], axis=1) # concat起来用于可视化
+                
             pts_bbox = dict(
                 boxes_3d=bboxes.to('cpu'),
                 scores_3d=scores.cpu(),
                 labels_3d=labels.cpu(),
                 attrs_3d=attrs,
-                matched_idxs=matched_idxs,
                 refine_wp=refine_wp,
                 route_wp=route_wp,
                 iscollide=iscollide, 
                 fut_boxes=fut_boxes,
-                attnmap=attnmap,
                 wp_attn=wp_attn,
-                img_metas=img_metas[i] # 这个bs的img_metas
+                all_wp_attn=all_wp_attn,
+                img_metas=img_metas[i]
             )
             bbox_results.append(pts_bbox)
         return bbox_results

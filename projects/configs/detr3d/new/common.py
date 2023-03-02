@@ -25,7 +25,8 @@ log_config = dict(
         dict(
             type='WandbLoggerHook', 
             init_kwargs=dict(
-                project='your-awesome-project',
+                project='ndetr',
+                name=None,
                 resume=False)
                 # resume='auto'
             )

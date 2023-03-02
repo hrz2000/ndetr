@@ -1,9 +1,10 @@
+from copy import deepcopy
 import torch
 
 from mmdet.core.bbox import BaseBBoxCoder
 from mmdet.core.bbox.builder import BBOX_CODERS
 from projects.mmdet3d_plugin.core.bbox.util import denormalize_bbox
-
+import numpy as np
 
 @BBOX_CODERS.register_module()
 class NMSFreeCoder(BaseBBoxCoder):
@@ -36,7 +37,8 @@ class NMSFreeCoder(BaseBBoxCoder):
     def encode(self):
         pass
 
-    def decode_single(self, cls_scores, bbox_preds, attnmap, new_gt_idxs_list, no_filter):
+    def decode_single(self, cls_scores, bbox_preds, no_filter):
+        # 想可视化一下是否监督对了
         """Decode bboxes.
         Args:
             cls_scores (Tensor): Outputs from the classification head, \
@@ -51,34 +53,14 @@ class NMSFreeCoder(BaseBBoxCoder):
         max_num = self.max_num
 
         cls_scores = cls_scores.sigmoid() # torch.Size([900, 2])
-        scores, indexs = cls_scores.view(-1).topk(max_num) # torch.Size([300]) torch.Size([300])
-        labels = indexs % self.num_classes # 类别
-        # bbox_index = indexs // self.num_classes # 第i个预测的box的索引
-        bbox_index = torch.div(indexs, self.num_classes, rounding_mode='trunc') # 第i个预测的box的索引
-        bbox_preds = bbox_preds[bbox_index] # torch.Size([300, 10])
-        if attnmap is not None: # single说的不是layers，是batch
-            # attnmap = attnmap.mean(0)
-            # attnmap = attnmap[1] # 第一个head
-            wp_wp = attnmap[:,0,0:1] # 所有head
-            # 在decode的时候已经对layers进行了平均，这里保留头
-            wp_route = attnmap[:,0,1:2] # TODO
-            wp_attn = attnmap[:,0,3:] # torch.Size([300, 10])
-            assert wp_attn.shape[-1] == 50
-            wp_attn = wp_attn[:,bbox_index]
-        else:
-            wp_attn = None
-            
-        if new_gt_idxs_list is not None:
-            new_gt_idxs_list = new_gt_idxs_list[bbox_index] 
-            # new_gt_idxs_list是预测的50个box和gt的1对1匹配，可能有的没有匹配上gt
-            # 这里的bbox_index是进行了置信度过滤等等操作，是说对50个里面的整体。
-            # import pdb;pdb.set_trace()
-        else:
-            new_gt_idxs_list = None
-
+        scores, indexs = cls_scores.view(-1).topk(max_num) # torch.Size([300])
+        labels = indexs % self.num_classes
+        bbox_index = torch.div(indexs, self.num_classes, rounding_mode='trunc')
+        bbox_preds = bbox_preds[bbox_index]
+        
+        select_idx = bbox_index
+        
         final_box_preds = denormalize_bbox(bbox_preds, self.pc_range) # torch.Size([300, 9])
-        # final_box_preds = bbox_preds
-        # TODO
 
         # pred是xyzxyz yaw1 yaw2 v1 v2
         final_scores = scores 
@@ -89,7 +71,6 @@ class NMSFreeCoder(BaseBBoxCoder):
             if self.score_threshold is not None:
                 thresh_mask = final_scores > self.score_threshold
         if self.post_center_range is not None: 
-            # tensor([-61.2000, -61.2000, -10.0000,  61.2000,  61.2000,  10.0000])
             # xyz xyz
             if not isinstance(self.post_center_range, torch.Tensor):
                 self.post_center_range = torch.tensor(
@@ -106,20 +87,19 @@ class NMSFreeCoder(BaseBBoxCoder):
             boxes3d = final_box_preds[mask]
             scores = final_scores[mask]
             labels = final_preds[mask]
-            if wp_attn is not None:
-                wp_attn = wp_attn[:,mask]
-                wp_attn = torch.cat([wp_wp, wp_attn, wp_route],dim=-1) # torch.Size([8, 4])
-                
-            if new_gt_idxs_list is not None:
-                new_gt_idxs_list = new_gt_idxs_list[mask]
+            
+            # not_valid = ~ mask
+            # map_selected1 = select_idx[bbox_index]
+            # map_selected1[not_valid] = False
+            # select_idx[bbox_index] = map_selected1
+            select_idx = select_idx[mask]
+            
             predictions_dict = {
                 'bboxes': boxes3d,
                 'scores': scores,
                 'labels': labels,
-                'wp_attn': wp_attn,
-                'matched_idxs': new_gt_idxs_list
+                'select_idx': select_idx,
             }
-            # 所以可能少于300个
 
         else:
             raise NotImplementedError(
@@ -139,23 +119,12 @@ class NMSFreeCoder(BaseBBoxCoder):
         Returns:
             list[dict]: Decoded boxes.
         """
-        all_cls_scores = preds_dicts['all_cls_scores'][-1] # torch.Size([6, 1, 50, 2])->最后一层torch.Size([1, 50, 2])
+        all_cls_scores = preds_dicts['all_cls_scores'][-1]
         all_bbox_preds = preds_dicts['all_bbox_preds'][-1]
-        if 'attnmap' in preds_dicts: # 这里是拿出最后一个batch
-            # preds_dicts['attnmap'] torch.Size([1, 6, 8, 53, 53])
-            attnmap = preds_dicts['attnmap'].mean(1) # 对6个layer平均，这些操作都是消除layers，保留batches
-            # attnmap = preds_dicts['attnmap'][-1] # TODO: 这里最后一层的结果 xxx
-        else:
-            attnmap = [None for i in range(len(all_bbox_preds))]
-            
-        if 'new_gt_idxs_list_layers' in preds_dicts:
-            new_gt_idxs_list = preds_dicts['new_gt_idxs_list_layers'][-1] # 均拿出最后一层的结果
-            # import pdb;pdb.set_trace()
-        else:
-            new_gt_idxs_list = [None for i in range(len(all_bbox_preds))]
+        # 拿到最后一层，只在最后一层解码
         
         batch_size = all_cls_scores.size()[0]
         predictions_list = []
         for i in range(batch_size):
-            predictions_list.append(self.decode_single(all_cls_scores[i], all_bbox_preds[i], attnmap[i], new_gt_idxs_list[i], no_filter))
+            predictions_list.append(self.decode_single(all_cls_scores[i], all_bbox_preds[i], no_filter))
         return predictions_list
