@@ -1100,11 +1100,12 @@ def get_all_weight_pred(wp_attn): # torch.Size([8, 4]) 8个头
     wp_attn = wp_attn.mean(0)
     self_weight = wp_attn[0]
     route_weight = wp_attn[1]
-    hdmap_weight = wp_attn[2]
-    max_obj_weight = wp_attn[3:].max()
-    mean_obj_weight = wp_attn[3:].mean()
+    # hdmap_weight = wp_attn[2] # 新版本没有用hdmap_weight
+    hdmap_weight = 0
+    max_obj_weight = wp_attn[2:].max()
+    mean_obj_weight = wp_attn[2:].mean()
     all_weight = wp_attn.sum()
-    lenbox = len(wp_attn) - 3
+    lenbox = len(wp_attn) - 2
     return np.array([self_weight, mean_obj_weight, max_obj_weight, route_weight, hdmap_weight, all_weight, lenbox])
 
 def get_all_weight_gt(wp_attn): # torch.Size([8, 4]) 8个头
