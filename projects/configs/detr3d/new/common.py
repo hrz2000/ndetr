@@ -10,7 +10,7 @@ val_ann_file = './data/carla_val_hdmap_all.pkl'
 # val_ann_file = './data/carla_val_hdmap_all.pkl'
 
 # simu_params=dict(use_collide=False)
-simu_params=dict(use_collide=True)
+simu_params=dict(use_collide=False)
 ################################
 checkpoint_config = dict(interval=3)
 # yapf:disable push

@@ -264,7 +264,8 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
     draw = ImageDraw.Draw(img)
     origin = (size[0]//2, size[1]//2)
 
-    gt_bbox = gt_pts_bbox.get('boxes_3d', None)
+    # gt_bbox = gt_pts_bbox.get('boxes_3d', None)
+    gt_bbox = gt_pts_bbox.get('gt_bboxes_3d', None)
     gt_wp_attn = gt_pts_bbox.get('wp_attn', None)
     gt_idxs = gt_pts_bbox.get('gt_idxs', None)
     match_map = pred_pts_bbox.get('match_map', None)
@@ -305,8 +306,11 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
             # draw.text(point, f"{np.array(arr)[:2].astype(int)}", fill='white', width=2) # center
             if box_type_idx==0:
                 draw.polygon((p1, p2, p3, p4), fill=c, outline='black')
+                pass
             else:
                 draw.polygon((p1, p2, p3, p4), outline=c)
+                # draw.polygon((p1, p2, p3, p4), fill=c, outline='black')
+                pass
 
             if 'speed' in box:
                 vel = box['speed']*3 #/3.6 # in m/s # just for visu
@@ -320,31 +324,32 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
                         # 第一个东西是对cls_emb的attn 错误
                         # 这个东西是和预测阈值的数量挂钩的，是过滤后的东西，倒是可以在前后拼接
                         # 这个+1没问题
-                    if match_map is not None:
-                        draw.text((endx1+30+30, endy1), f"{int(match_map[idx])}", fill='blue')
+                    # if match_map is not None:
+                    #     draw.text((endx1+30+30, endy1), f"{int(match_map[idx])}", fill='blue')
                 else:
                     if gt_wp_attn is not None:
                         # gt_wp_attn比gt_idxs多一些，因为由对route的attn
                         # import pdb;pdb.set_trace()
-                        draw.text((endx1+30+60, endy1), f"{gt_wp_attn[idx]:.2f}", fill='green') 
+                        draw.text((endx1+30+60, endy1), f"{gt_wp_attn[idx+1]:.2f}", fill='green') 
                         # 第一个东西是对cls_emb的attn，第一次是ego对应attn是ego，没问题
-                    if gt_idxs is not None:
-                        draw.text((endx1+30+90, endy1), f"{int(gt_idxs[idx])}", fill='green') 
+                    # if gt_idxs is not None:
+                    #     draw.text((endx1+30+90, endy1), f"{int(gt_idxs[idx])}", fill='green') 
     
     # import pdb;pdb.set_trace()
     # if len(gt_wp_attn) != len(wp_attn):
     #     # import pdb;pdb.set_trace()
     #     print(len(gt_wp_attn),len(wp_attn))
-    if gt_wp_attn is not None and wp_attn is not None:
-        assert len(gt_idxs) + 2 == len(gt_wp_attn) # 因为gt_idxs在可视化获取box的时候进行了前面补0，所以会多出一个
-        str1 = ",".join([f"{t*100:.0f}" for t in gt_wp_attn])
-        str1_ = "ego,"+','.join([f"{t:.0f}" for i,t in enumerate(gt_idxs) if i>0])+',route'
-        str2 = ",".join([f"{t*100:.0f}" for t in wp_attn])
-        str2_ = 'ego, ..., route1'
-        draw.text((10,250), str1, fill='green') 
-        draw.text((10,230), str1_, fill='green') 
-        draw.text((10,270), str2, fill='blue') 
-        draw.text((10,290), str2_, fill='blue') 
+    
+    # if gt_wp_attn is not None and wp_attn is not None:
+    #     assert len(gt_idxs) + 2 == len(gt_wp_attn) # 因为gt_idxs在可视化获取box的时候进行了前面补0，所以会多出一个
+    #     str1 = ",".join([f"{t*100:.0f}" for t in gt_wp_attn])
+    #     str1_ = "ego,"+','.join([f"{t:.0f}" for i,t in enumerate(gt_idxs) if i>0])+',route'
+    #     str2 = ",".join([f"{t*100:.0f}" for t in wp_attn])
+    #     str2_ = 'ego, ..., route1'
+    #     draw.text((10,250), str1, fill='green') 
+    #     draw.text((10,230), str1_, fill='green') 
+    #     draw.text((10,270), str2, fill='blue') 
+    #     draw.text((10,290), str2_, fill='blue') 
     
     gt_wp = copy.deepcopy(gt_pts_bbox.get('attrs_3d', None))
     pred_wp = copy.deepcopy(pred_pts_bbox.get('attrs_3d', None))
@@ -367,6 +372,8 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
     light = gt_pts_bbox.get('light', None)
     command = gt_pts_bbox.get('command', None)
     iscollide = pred_pts_bbox.get('iscollide', None)
+    
+    # route=None
     if route is not None:
         arr = route[0] # 第一个route，6d
         box = {}

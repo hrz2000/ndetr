@@ -18,8 +18,8 @@ if is_ndetr:
     # config="projects/configs/detr3d/new/bs_box_wpattn_refine.py"
     # # checkpoint='pretrain/cross_attn.pth'
     # checkpoint='work_dirs/bs_box_wpattn_refine/2023-02-24_12:23:34/epoch_18.pth'
-    config="projects/configs/detr3d/new/bs_box_wpattn_refine.py"
-    checkpoint='pretrain/cross_attn.pth'
+    config="projects/configs/detr3d/new/box_wpattn_refine.py"
+    checkpoint='work_dirs/box_wpattn_refine/2023-03-02_10:40:53/epoch_18.pth'
 else:
     config=experiments+'.py'
     checkpoint='no.pth'
@@ -39,9 +39,9 @@ unblock=False
 repetitions=1
 
 
-# save_path=osp.join('./output/output', osp.splitext(osp.basename(config))[0])+ "/" + time.strftime('%Y-%m-%d_%H:%M:%S')
+save_path=osp.join('./output/output', osp.splitext(osp.basename(config))[0])+ "/" + time.strftime('%Y-%m-%d_%H:%M:%S')
 # save_path='output/output/bs_box_wpattn_new/2023-02-24_10:43:53'
-save_path='output/output/bs_box_wpattn_norouteandmap/2023-02-24_23:00:18'
+# save_path='output/output/bs_box_wpattn_norouteandmap/2023-02-24_23:00:18'
 
 # p = subprocess.Popen(f"SDL_VIDEODRIVER=offscreen $CARLA_SERVER -carla-rpc-port=20{port} -nosound -opengl", shell=True)
 

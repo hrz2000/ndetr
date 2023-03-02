@@ -416,8 +416,8 @@ class PlanTPerceptionAgent(autonomous_agent.AutonomousAgent):
     def tick(self, input_data, future_wp=None):
 
         rgb = []
-        rgb.append(cv2.cvtColor(input_data['rgb_front'][1][:, :, :3], cv2.COLOR_BGR2RGB)) # TODO
-        # rgb.append(input_data['rgb_front'][1][:, :, :3]) # 就是rgb
+        # rgb.append(cv2.cvtColor(input_data['rgb_front'][1][:, :, :3], cv2.COLOR_BGR2RGB)) # TODO
+        rgb.append(input_data['rgb_front'][1][:, :, :3]) # 就是rgb 
         rgb = np.concatenate(rgb, axis=1)
         
         lidar = input_data['lidar'][1][:, :3]
