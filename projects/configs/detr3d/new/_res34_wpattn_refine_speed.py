@@ -1,6 +1,7 @@
 from projects.configs.detr3d.new.common import *
 
 find_unused_parameters=True
+use_flatten_feat=True
 use_all_map=False
 use_gt_light=False
 use_det_metric=True
@@ -38,7 +39,7 @@ temporal=None
 model = dict(
     type='Detr3D',
     use_grid_mask=True,
-    pred_velo=loss_weights['loss_speed']!=0,
+    use_flatten_feat=use_flatten_feat,
     temporal=temporal,
     img_backbone=dict(
         type='ResNet',

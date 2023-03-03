@@ -9,7 +9,7 @@ use_all_map=False
 use_gt_light=False
 use_det_metric=True
 loss_weights=dict(
-    loss_attnmap=10000,
+    loss_attnmap=0,
     loss_speed=1,
 )
 
