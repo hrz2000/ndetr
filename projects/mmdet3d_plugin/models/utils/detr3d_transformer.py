@@ -11,7 +11,7 @@ from mmcv.runner.base_module import BaseModule
 from mmdet.models.utils.builder import TRANSFORMER
 import mmcv
 from mmcv.runner import force_fp32, auto_fp16
-from projects.mmdet3d_plugin.models.utils.detr3d_ca import Detr3DCrossAtten
+from projects.mmdet3d_plugin.models.utils.detr3d_attn_ca import Detr3DCrossAtten
 
 @TRANSFORMER.register_module()
 class Detr3DTransformer(BaseModule):

@@ -1,4 +1,4 @@
-from projects.mmdet3d_plugin.models.utils.nn_mhforward import multi_head_attention_forward_my
+from projects.mmdet3d_plugin.models.utils.nn_multihead_forward import multi_head_attention_forward_my
 from typing import Optional, Tuple
 
 import torch

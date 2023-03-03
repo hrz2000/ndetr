@@ -22,7 +22,7 @@ import os
 from projects.mmdet3d_plugin.datasets.vis_tools import create_bev, create_collide_bev
 from mmcv.parallel import DataContainer as DC
 import time
-from projects.mmdet3d_plugin.models.utils.detr3d_ca import CrossAttn
+from projects.mmdet3d_plugin.models.utils.detr3d_attn_ca import CrossAttn
 from mmcv.runner.base_module import BaseModule
 
 def gaussian2D(shape, sigma=1):
