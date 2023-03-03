@@ -147,7 +147,6 @@ class Detr3DTransformer(BaseModule):
 
         if self.use_bev_query:
             if not self.no_route:
-                # import pdb;pdb.set_trace()
                 bev_batch = np.stack([t['hdmap'] for t in img_metas])
                 bev_batch = query.new_tensor(bev_batch)
                 bev_batch = F.interpolate(
@@ -166,7 +165,6 @@ class Detr3DTransformer(BaseModule):
         
         if self.use_route_query: # 总有route query占着位置
             if not self.no_route:
-                # import pdb;pdb.set_trace()
                 if np.random.rand() < self.route_mask:
                     bs = len(img_metas)
                     route_emb = query.new_tensor(np.random.randn(bs, 512))  # 2*18*18->256d

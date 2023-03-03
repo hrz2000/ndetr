@@ -79,7 +79,7 @@ def create_front(pred_pts_bbox, gt_pts_bbox, front_img, cam2img):
             thickness=1)
     if gt_pts_bbox!=None and 'boxes_3d' in gt_pts_bbox:
         front_img = draw_camera_bbox3d_on_img(
-            gt_pts_bbox['boxes_3d'][1:], # 这个也是instance3d
+            gt_pts_bbox['boxes_3d'], # 这个也是instance3d
             raw_img=front_img,
             cam2img=cam2img,
             img_metas=None,
@@ -271,11 +271,15 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
     match_map = pred_pts_bbox.get('match_map', None)
     pred_bbox = pred_pts_bbox.get('boxes_3d', None)
     wp_attn = pred_pts_bbox.get('wp_attn', None)
+    select_idx = pred_pts_bbox.get('select_idx', None)
+    all_attnmap = pred_pts_bbox.get('all_attnmap', None)
     
     if gt_wp_attn is not None:
         gt_wp_attn = gt_wp_attn.mean(0)
     if wp_attn is not None:
         wp_attn = wp_attn.mean(0)
+    if all_attnmap is not None:
+        all_attnmap = all_attnmap.mean(0)
     # if gt_wp_attn is not None:
     #     gt_wp_attn = gt_wp_attn[1]
     # if wp_attn is not None:
@@ -317,6 +321,14 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
                 endx1, endy1, endx2, endy2 = get_coords(x, y, yaw, vel)
                 fill_c = 'orange' if box_type_idx==0 else 'royalblue'
                 draw.line((endx1, endy1, endx2, endy2), fill=fill_c, width=1)
+                
+                if box_type_idx == 1 and select_idx is not None:
+                    query_idx = int(select_idx[idx])
+                    draw.text((endx1+10, endy1+10), f"{query_idx}", fill='springgreen')
+                    attn_list = all_attnmap[query_idx].detach().cpu().numpy()
+                    cls_emb = attn_list[0]
+                    mean_emb = attn_list[2:].mean()
+                    draw.text((endx1+15, endy1+10), f"{cls_emb:.2f},{mean_emb:.2f}", fill='springgreen')
                 
                 if box_type_idx==1: # 预测
                     if wp_attn is not None:

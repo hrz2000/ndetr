@@ -159,7 +159,7 @@ class Wp_grurefine(nn.Module):
                 x_in = torch.cat([x, tp_batch], dim=1) # bs,(2+2)
                 if self.wp_refine_input_last:
                     x_in = torch.cat([x_in, x_last[:,idx_npred]], dim=1)
-                if self.gru_use_box:
+                if self.gru_use_box and batch_npred_bbox is not None:
                     x_in = torch.cat([x_in, batch_npred_bbox[:, :, idx_npred].reshape(bs, -1)], dim=1) # bs, num_box, npred, 10d
                 z = self.wp_decoder(x_in, z) # torch.Size([1, 65])
                 dx = self.wp_output(z) # torch.Size([1, 2])
@@ -429,7 +429,7 @@ class Detr3DHead(DETRHead):
         batch_npred_bbox = torch.zeros((bs, self.gru_use_box, self.pred_len, cdim)).to('cuda')
         
         query_embeds = self.query_embedding.weight
-
+        
         outputs = self.transformer(
             mlvl_feats=mlvl_feats,
             query_embed=query_embeds,
@@ -492,7 +492,6 @@ class Detr3DHead(DETRHead):
                 refined_wp = tmp2
                 refine_wp_layers.append(refined_wp)
 
-        self.extra_query = hs.shape[-2] % 10 ### 需要保证,如果我query1个或者2个没办法batch统一
         outputs_classes = torch.stack(outputs_classes)[:,:,self.extra_query:,:]
         outputs_coords = torch.stack(outputs_coords)[:,:,self.extra_query:,:] # torch.Size([6, 2, 50, 10])
         refine_wp_layers = torch.stack(refine_wp_layers) if self.wp_refine else [None]*len(outputs_classes) # torch.Size([6, 2, 4, 2])
@@ -501,50 +500,58 @@ class Detr3DHead(DETRHead):
         batch_pts_boxes = self.get_only_bboxes(outs=outs, img_metas=img_metas)
         # 这里会获取一次box
         
-        # 计算未来时刻的box位置、预测waypoint
-        outputs_wps = []
-        wp_embs = hs[:,:,self.wp_query_pos,:] # torch.Size([6, 2, 256])
-        box_batch = self.get_box_batch(batch_pts_boxes) # 只拿最后一层预测来解码box, (bs, num_box, ndim=10)
-
-        for lvl in range(wp_embs.shape[0]): # torch.Size([6, 2, 256])
-            # outputs_wp = self.pred_waypoint_per_layer(
-            #     wp_emb, tp_batch, light_batch, cmd_batch, box_batch)
-            outputs_wp = self.wp_decoder(refine_wp_layers[lvl], wp_embs[lvl], tp_batch, light_batch, cmd_batch, box_batch)
-            # 这里是用的外面的的wp_decoder，不重复            
-            outputs_wps.append(outputs_wp)
-        all_wp_preds = torch.stack(outputs_wps) # torch.Size([6, 1, 4, 2]), lidar系
-        
+        assert self.gru_use_box == False, 'box length bug'
+        if self.gru_use_box:
+            # 计算未来时刻的box位置、预测waypoint
+            outputs_wps = []
+            wp_embs = hs[:,:,self.wp_query_pos,:] # torch.Size([6, 2, 256])
+            box_batch = self.get_box_batch(batch_pts_boxes) # 只拿最后一层预测来解码box, (bs, num_box, ndim=10)
+            for lvl in range(wp_embs.shape[0]): # torch.Size([6, 2, 256])
+                outputs_wp = self.wp_decoder(refine_wp_layers[lvl], wp_embs[lvl], tp_batch, light_batch, cmd_batch, box_batch)
+                outputs_wps.append(outputs_wp)
+            all_wp_preds = torch.stack(outputs_wps) # torch.Size([6, 1, 4, 2]), lidar系
+        else:
+            if self.wp_refine:
+                all_wp_preds = refine_wp_layers
+                refine_wp_layers = None
+            else:
+                outputs_wps = []
+                wp_embs = hs[:,:,self.wp_query_pos,:] # torch.Size([6, 2, 256])
+                box_batch = None # 只拿最后一层预测来解码box, (bs, num_box, ndim=10)
+                for lvl in range(wp_embs.shape[0]): # torch.Size([6, 2, 256])
+                    outputs_wp = self.wp_decoder(refine_wp_layers[lvl], wp_embs[lvl], tp_batch, light_batch, cmd_batch, box_batch)
+                    outputs_wps.append(outputs_wp)
+                all_wp_preds = torch.stack(outputs_wps) # torch.Size([6, 1, 4, 2]), lidar系
+                # assert False, "no cross_attn"
+            
         # 计算route_wp、iscollide
         for batch_id, pts_bbox in enumerate(batch_pts_boxes):
-            pts_bbox['attrs_3d'] = all_wp_preds[-1,batch_id] # 只要最后一层
-        
-        route_wp = self.get_route_wp(all_wp_preds, route_batch, nlayer=len(wp_embs))
+            pts_bbox['attrs_3d'] = all_wp_preds[-1,batch_id]
+        route_wp = self.get_route_wp(all_wp_preds, route_batch)
         iscollide = self.get_iscollide(batch_pts_boxes)
         
-        collision_avoidance = False
-        if collision_avoidance:
-            for batch_i, batch_i_col in enumerate(iscollide):
-                if batch_i_col:
-                    all_wp_preds[:, batch_i, :, 0] = (all_wp_preds[:, batch_i, :, 0] + 1.3)/2 - 1.3
-                    all_wp_preds[:, batch_i, :, 1] = 0
+        # collision_avoidance = False
+        # if collision_avoidance:
+        #     for batch_i, batch_i_col in enumerate(iscollide):
+        #         if batch_i_col:
+        #             all_wp_preds[:, batch_i, :, 0] = (all_wp_preds[:, batch_i, :, 0] + 1.3)/2 - 1.3
+        #             all_wp_preds[:, batch_i, :, 1] = 0
                             
         outs = {
             'all_cls_scores': outputs_classes, # torch.Size([6, 1, 50, 2])
             'all_bbox_preds': outputs_coords,  # torch.Size([6, 1, 50, 10])
-            'refine_wp': refine_wp_layers if self.wp_refine else None,  # torch.Size([6, bs=1, 4, 2])
+            'all_wp_preds': all_wp_preds, # torch.Size([6, 1, 4, 2])
+            'all_attnmap': all_attnmap,
+
+            'refine_wp': None, 
+            'fut_boxes': None, 
             'enc_cls_scores': None,
             'enc_bbox_preds': None,
-            'all_wp_preds': all_wp_preds, # torch.Size([6, 1, 4, 2])
-            'fut_boxes': box_batch, # (bs,3,npred,10d)
             
             'route_wp': route_wp,
-            
             'iscollide': iscollide,
             'tp': tp_batch,
-            'all_attnmap': all_attnmap,
-            'attnmap': all_attnmap,
         }
-        # 还会根据这些信息再次获取box
         return outs, hs
 
     def get_box_batch(self, batch_pts_boxes):
@@ -820,9 +827,9 @@ class Detr3DHead(DETRHead):
         losses_wp = losses_wp.mean(-1)
         self.loss_update(losses, losses_wp, 'wp')
             
-        if self.wp_refine:
-            losses_wp = F.l1_loss(refine_wp, gt_wp, reduction='none').mean([1,2,3])
-            self.loss_update(losses, losses_wp, 'refine_wp')
+        # if self.wp_refine: # 不进行这一步了
+        #     losses_wp = F.l1_loss(refine_wp, gt_wp, reduction='none').mean([1,2,3])
+        #     self.loss_update(losses, losses_wp, 'refine_wp')
         
         self.penalty(pred_wp, route_wp, iscollide, tp, losses, head=self)
         
@@ -836,6 +843,12 @@ class Detr3DHead(DETRHead):
                 loss_attnmap = torch.stack(loss_attnmap_list).mean()
                 losses.update({'attnmap_loss': loss_attnmap*self.loss_weights.loss_attnmap})
                 
+        pred_speed = outs.get('speed', None)
+        if pred_speed is not None and self.loss_weights.loss_speed != 0:
+            gt_speed = pred_speed.new_tensor(np.array([t['speed'] for t in img_metas])).reshape(-1,1)
+            loss_speed = F.l1_loss(pred_speed, gt_speed)
+            losses.update({'speed_loss': loss_speed*self.loss_weights.loss_speed})
+            
         return losses, match_map
     
     def get_single_attnloss(self, match_map, gt_idxs, attnmap, img_metas):
@@ -846,7 +859,7 @@ class Detr3DHead(DETRHead):
         sorted_idxs = get_sort_idx(match_map, gt_idxs)
         other_idxs = [t for t in range(50) if t not in sorted_idxs]
         other_idxs = [t+self.extra_query for t in other_idxs]
-        other_idxs = [2, *other_idxs] # hdmap
+        # other_idxs = [2, *other_idxs] # hdmap bug3.3: 不应该有这一行
         sorted_idxs = [t+self.extra_query for t in sorted_idxs]
         sorted_idxs = [self.wp_query_pos, *sorted_idxs, self.route_query_pos]
         
@@ -858,6 +871,7 @@ class Detr3DHead(DETRHead):
         
         pred_wp_attn = pred_wp_attn.softmax(-1)
         gt_wp_attn = gt_wp_attn.softmax(-1)
+        # bug?3.3: 是不是不需要对gt_wp_attn进行softmax
 
         loss_attnmap = F.l1_loss(pred_wp_attn, gt_wp_attn)
         
@@ -934,13 +948,11 @@ class Detr3DHead(DETRHead):
                 loss_dict[prefix] = inp_loss_dict['d5']
         return loss_dict
     
-    def get_route_wp(self, wp, route_batch, nlayer):
+    def get_route_wp(self, all_wp_preds, route_batch):
         # wp传入gt/pred_wp，注意gt_wp传进来之前需要进行repeat
-        if len(wp.shape) == 3:
-            wp = wp[None,...].repeat(nlayer,1,1,1)
-        layer_batch_len_x = wp[:,:,:,0] + 1.3 # lidar到ego
-        layer_batch_len_y = wp[:,:,:,1] # layer6,bs,pred4
-        nlayer, bs, pred_len, _ = wp.shape
+        nlayer, bs, pred_len, _ = all_wp_preds.shape
+        layer_batch_len_x = all_wp_preds[:,:,:,0] + 1.3 # lidar到ego
+        layer_batch_len_y = all_wp_preds[:,:,:,1] # layer6,bs,pred4
 
         bs, ndim = route_batch.shape
         route_batch = route_batch.reshape(1, bs, 1, ndim).repeat(nlayer, 1, pred_len, 1)
@@ -998,10 +1010,7 @@ class Detr3DHead(DETRHead):
         
     @force_fp32(apply_to=('preds_dicts'))
     def get_bboxes(self, outs, img_metas, rescale=False, no_filter=False):
-        # outs: dict_keys(['all_cls_scores', 'all_bbox_preds', 'refine_wp', 'enc_cls_scores', 'enc_bbox_preds', 'all_wp_preds', 'fut_boxes', 'route_wp', 'iscollide', 'tp', 'all_attnmap', 'new_gt_idxs_list_layers'])
-        # torch.Size([6, 1, 8, 53, 53])
-        preds_dicts = self.bbox_coder.decode(outs, no_filter=no_filter)
-        # [dict_keys(['bboxes', 'scores', 'labels']),...]
+        preds_dicts = self.bbox_coder.decode(outs, no_filter=no_filter) # [dict_keys(['bboxes', 'scores', 'labels']),...]
         num_samples = len(preds_dicts)
         bbox_results = []
         
@@ -1015,20 +1024,13 @@ class Detr3DHead(DETRHead):
             select_idx = preds['select_idx'].cpu().detach().numpy() + self.extra_query
             wp_attn = outs['all_attnmap'][:,i].mean(0)[:,0,[0,*select_idx,1]]
             all_wp_attn = outs['all_attnmap'][:,i].mean(0)[:,0]
+            all_attnmap = outs['all_attnmap'][:,i].mean(0)
             
-            if outs['all_wp_preds'] is not None: # torch.Size([6, 1, 4, 2])
-                attrs=outs['all_wp_preds'][-1][i].cpu() # 最后一层的第i个batch
-            if outs['refine_wp'] is not None:
-                refine_wp=outs['refine_wp'][-1][i].cpu() # 最后一层的第i个batch
-            if outs['route_wp'] is not None:
-                route_wp=outs['route_wp'][-1][i].cpu()
-            if outs['iscollide'] is not None:
-                iscollide=outs['iscollide'][i].cpu() # bool
-            if outs['fut_boxes'] is not None:
-                fut_boxes=outs['fut_boxes'][i].cpu()
-            # if outs['all_attnmap'] is not None:
-            #     attnmap=outs['all_attnmap'][-1][i].cpu() # torch.Size([8, 53, 53])
-            #     attnmap=torch.cat([t for t in attnmap], axis=1) # concat起来用于可视化
+            refine_wp = None if outs['refine_wp'] is None else outs['refine_wp'][-1][i].cpu()
+            attrs = None if outs['all_wp_preds'] is None else outs['all_wp_preds'][-1][i].cpu()
+            route_wp = None if outs['route_wp'] is None else outs['route_wp'][-1][i].cpu()
+            iscollide = None if outs['iscollide'] is None else outs['iscollide'][i].cpu()
+            fut_boxes = None if outs['fut_boxes'] is None else outs['fut_boxes'][i].cpu()
                 
             pts_bbox = dict(
                 boxes_3d=bboxes.to('cpu'),
@@ -1041,7 +1043,9 @@ class Detr3DHead(DETRHead):
                 fut_boxes=fut_boxes,
                 wp_attn=wp_attn,
                 all_wp_attn=all_wp_attn,
-                img_metas=img_metas[i]
+                all_attnmap=all_attnmap,
+                img_metas=img_metas[i],
+                select_idx=select_idx,
             )
             bbox_results.append(pts_bbox)
         return bbox_results

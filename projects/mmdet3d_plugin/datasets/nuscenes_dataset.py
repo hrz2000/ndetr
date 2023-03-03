@@ -10,6 +10,7 @@ from nuscenes.utils.data_classes import Box as NuScenesBox
 import torch
 import matplotlib.pyplot as plt
 from tabulate import tabulate
+from projects.configs.detr3d.new.debug import debug_start, debug_end
 
 from mmdet3d.core import show_result
 from mmdet3d.core.bbox import Box3DMode, Coord3DMode, LiDARInstance3DBoxes
@@ -195,7 +196,7 @@ class CustomNuScenesDataset(Custom3DDataset):
             # data_infos = data_infos[1185:1195]
             # data_infos = [data_infos[i] for i in [20,30,40,50,100,500,700,800,900,1200,1190]]
             # data_infos = data_infos[1145:1200]
-            data_infos = data_infos[0:300]
+            data_infos = data_infos[debug_start:debug_end]
             # data_infos = data_infos[0:1]
             pass
         elif self.in_test:
@@ -239,6 +240,8 @@ class CustomNuScenesDataset(Custom3DDataset):
         topdown_path = fv_path.replace('rgb','topdown')
         topdown = mmcv.imread(topdown_path)
 
+        measurements_path = fv_path.replace('rgb','measurements').replace('png','json')
+        speed = mmcv.load(measurements_path, file_format='json')['speed']
         hdmap = np.stack([mmcv.imread(fv_path.replace('rgb','hdmap0'),'grayscale'), mmcv.imread(fv_path.replace('rgb','hdmap1'),'grayscale')], axis=0)
             
         attnmap_path = fv_path.replace('rgb', 'attnmap').replace('png','pkl')
@@ -273,6 +276,7 @@ class CustomNuScenesDataset(Custom3DDataset):
             wp_attn=ann_info['wp_attn'],
             sort_idx=ann_info['sort_idx'],
             index=index,
+            speed=speed,
         )
         
         return input_dict
@@ -638,16 +642,17 @@ class CustomNuScenesDataset(Custom3DDataset):
             # len_box = gt_box['len_box']
             # len_gt = len(gt_box['gt_idxs'])
             
-            info_list.append(np.stack([
-                get_weight(gt_ptx_bbox['wp_attn']), 
-                get_weight(pts_bbox['wp_attn']), 
-                get_all_weight_pred(pts_bbox['all_wp_attn']), 
-                get_all_weight_gt(gt_ptx_bbox['all_wp_attn'])]))
+            if 'wp_attn' in pts_bbox:
+                info_list.append(np.stack([
+                    get_weight(gt_ptx_bbox['wp_attn']), 
+                    get_weight(pts_bbox['wp_attn']), 
+                    get_all_weight_pred(pts_bbox['all_wp_attn']), 
+                    get_all_weight_gt(gt_ptx_bbox['all_wp_attn'])]))
             
             result = batch_i_result['loss']
             # attnmap_loss = result['attnmap_loss']
             wp_loss = result['wp']
-            iscollide = pts_bbox['iscollide']
+            iscollide = pts_bbox.get('iscollide', None)
             
             all_save = True
             if all_save == False:
@@ -664,17 +669,18 @@ class CustomNuScenesDataset(Custom3DDataset):
                     loss_dict[k] /= len(batch_results)
         results_dict.update(loss_dict)
 
-        info_list = np.stack(info_list) # bs, x, 4
-        info_list = info_list.mean(0) # x, 4
-        
-        tab = {"Name": ["ego", "mean", "max", "route", "hdmap", "sum", "box_num"],
-                "gt": info_list[0].tolist(),
-                "gt_all": info_list[3].tolist(),
-                "pr": info_list[1].tolist(),
-                "pr_all": info_list[2].tolist(),}
+        if len(info_list) > 0:
+            info_list = np.stack(info_list) # bs, x, 4
+            info_list = info_list.mean(0) # x, 4
+            
+            tab = {"Name": ["ego", "mean", "max", "route", "hdmap", "sum", "box_num"],
+                    "gt": info_list[0].tolist(),
+                    "gt_all": info_list[3].tolist(),
+                    "pr": info_list[1].tolist(),
+                    "pr_all": info_list[2].tolist(),}
 
-        print()
-        print(tabulate(tab, headers="keys", tablefmt="grid", floatfmt=".2f"))
+            print()
+            print(tabulate(tab, headers="keys", tablefmt="grid", floatfmt=".2f"))
         
         if self.vis:
             self.show_ndetr(batch_results, gt_results, self.vis_dir, show=self.vis, pipeline=pipeline, hardcase=hardcase)
