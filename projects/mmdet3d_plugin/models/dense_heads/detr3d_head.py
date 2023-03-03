@@ -526,7 +526,7 @@ class Detr3DHead(DETRHead):
             outputs_wp = self.wp_decoder(refine_wp_layers[lvl], wp_embs[lvl], tp_batch, light_batch, cmd_batch, box_batch)
             outputs_wps.append(outputs_wp)
         all_wp_preds = torch.stack(outputs_wps) # torch.Size([6, 1, 4, 2]), lidar系
-        assert self.wp_refine == None
+        # assert self.wp_refine == None
 
         # import pdb;pdb.set_trace()
         pred_speed = self.speed_branch(wp_embs.mean(0)) if self.pred_speed else None
@@ -547,6 +547,7 @@ class Detr3DHead(DETRHead):
         outs = {
             'all_cls_scores': outputs_classes, # torch.Size([6, 1, 50, 2])
             'all_bbox_preds': outputs_coords,  # torch.Size([6, 1, 50, 10])
+            'refine_wp_layers': refine_wp_layers if self.wp_refine else None,
             'all_wp_preds': all_wp_preds, # torch.Size([6, 1, 4, 2])
             'all_attnmap': all_attnmap,
 

@@ -1,12 +1,11 @@
 from projects.configs.detr3d.new.common import *
 
 find_unused_parameters=True
-use_flatten_feat=True
 use_all_map=False
 use_gt_light=False
 use_det_metric=True
 loss_weights=dict(
-    loss_attnmap=10000,
+    loss_attnmap=0,
     loss_speed=1,
 )
 
@@ -18,7 +17,7 @@ num_query=50
 wp_refine='gru' # gru, linear, None
 wp_refine_input_last=True
 
-gru_use_box=0
+gru_use_box=3
 velo_update=False
 
 penalty_args = dict(
@@ -39,15 +38,14 @@ temporal=None
 model = dict(
     type='Detr3D',
     use_grid_mask=True,
-    use_flatten_feat=use_flatten_feat,
     temporal=temporal,
     img_backbone=dict(
         type='ResNet',
-        depth=34,
+        depth=50,
         init_cfg=dict(
             type='Pretrained',
-            # checkpoint='open-mmlab://detectron2/resnet34_caffe'
-            checkpoint='https://download.pytorch.org/models/resnet34-333f7ec4.pth'
+            checkpoint='open-mmlab://detectron2/resnet50_caffe'
+            # checkpoint='https://download.pytorch.org/models/resnet34-333f7ec4.pth'
             ),
         num_stages=4,
         out_indices=(0, 1, 2, 3),
@@ -55,12 +53,12 @@ model = dict(
         norm_cfg=dict(type='BN2d', requires_grad=False),
         norm_eval=True,
         style='caffe',
-        # dcn=dict(type='DCNv2', deform_groups=1, fallback_on_stride=False),
-        # stage_with_dcn=(False, False, True, True)
+        dcn=dict(type='DCNv2', deform_groups=1, fallback_on_stride=False),
+        stage_with_dcn=(False, False, True, True)
         ),
     img_neck=dict(
         type='FPN',
-        in_channels=[64, 128, 256, 512],
+        in_channels=[256, 512, 1024, 2048],
         out_channels=256,
         start_level=1,
         add_extra_convs='on_output',
@@ -68,7 +66,6 @@ model = dict(
         relu_before_extra_convs=True),
     pts_bbox_head=dict(
         type='Detr3DHead',
-        pred_speed=pred_speed,
         use_all_map=use_all_map,
         use_gt_light=use_gt_light,
         loss_weights=loss_weights,

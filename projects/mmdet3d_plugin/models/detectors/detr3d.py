@@ -297,43 +297,6 @@ class Detr3D(MVXTwoStageDetector):
             losses=losses,
         )
         
-    # def his2future_queries(self, his_queries_list):
-    #     fu_outs_list = []
-    #     layer, bs, num_queries, ndim = his_queries_list[0].shape
-    #     z = torch.zeros((layer*bs*num_queries, ndim)).to('cuda') # 隐状态同每次输入
-    #     zero_inp = torch.zeros((layer*bs*num_queries, ndim)).to(z.device) # 后续四次的输入
-    #     for his_outs in his_queries_list:
-    #         inp = his_outs.reshape(-1, self.gru_dim) # 这样每个layer\bs\query是独立的
-    #         z = self.temporal_model(inp, z)
-    #     for i in range(self.pred_len):
-    #         z = self.temporal_model(zero_inp, z)
-    #         z_reshape = z.reshape(layer, bs, num_queries, self.gru_dim)
-    #         fu_outs_list.append(z_reshape)
-    #     return fu_outs_list
-    
-    # def his2future_outs(self, his_outs_list): # [dict_keys(['all_cls_scores', 'all_bbox_preds', 'enc_cls_scores', 'enc_bbox_preds', 'all_wp_preds', 'correct'])] # torch.Size([6, 2, 50, 2])
-    #     fu_outs_list = []
-    #     outs = his_outs_list[0]
-    #     layer, bs, num_queries, clas = outs['all_cls_scores'].shape
-    #     layer, bs, num_queries, ndim = outs['all_bbox_preds'].shape
-    #     z = torch.zeros((layer*bs*num_queries, clas+ndim)).to('cuda') # 隐状态同每次输入
-    #     zero_inp = torch.zeros((layer*bs*num_queries, clas+ndim)).to(z.device) # 后续四次的输入
-    #     for his_outs in his_outs_list:
-    #         inp = torch.cat([his_outs['all_cls_scores'], his_outs['all_bbox_preds']], -1)
-    #         inp = inp.reshape(-1, self.gru_dim) # 这样每个layer\bs\query是独立的
-    #         z = self.temporal_model(inp, z)
-    #     for i in range(self.pred_len):
-    #         z = self.temporal_model(zero_inp, z)
-    #         z_reshape = z.reshape(layer, bs, num_queries, self.gru_dim)
-    #         ret = dict(
-    #             all_cls_scores = z_reshape[...,:clas],
-    #             all_bbox_preds = z_reshape[...,clas:],
-    #             enc_cls_scores = None,
-    #             enc_bbox_preds = None
-    #         )
-    #         fu_outs_list.append(ret)
-    #     return fu_outs_list
-        
     def show_results(self,
                     data,
                     result,
