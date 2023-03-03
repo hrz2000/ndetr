@@ -12,7 +12,6 @@ import torch.nn as nn
 from diskcache import Cache
 import time
 import copy
-from projects.mmdet3d_plugin.models.backbones.resnet import *
 
 def get_k():
     K = np.identity(3)

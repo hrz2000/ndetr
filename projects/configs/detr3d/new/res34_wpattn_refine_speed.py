@@ -1,4 +1,3 @@
-_base_ = ['../../../../mmdetection3d/configs/_base_/datasets/nus-3d.py']
 from projects.configs.detr3d.new.common import *
 
 find_unused_parameters=True

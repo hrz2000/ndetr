@@ -1,21 +1,23 @@
-_base_ = ['../../../../mmdetection3d/configs/_base_/datasets/nus-3d.py']
 from projects.configs.detr3d.new.common import *
 
+find_unused_parameters=True
+use_all_map=False
 use_gt_light=False
-use_det_metric=False
+use_det_metric=True
 loss_weights=dict(
-    loss_attnmap=0
+    loss_attnmap=0,
+    loss_speed=1,
 )
 
-batch=32*2
+batch=32
 workers=4
 lr=2e-4
 num_query=50
 
-wp_refine=None # gru, linear, None
-wp_refine_input_last=False
+wp_refine='gru' # gru, linear, None
+wp_refine_input_last=True
 
-gru_use_box=3
+gru_use_box=0
 velo_update=False
 
 penalty_args = dict(
@@ -36,24 +38,28 @@ temporal=None
 model = dict(
     type='Detr3D',
     use_grid_mask=True,
+    pred_velo=loss_weights['loss_speed']!=0,
     temporal=temporal,
     img_backbone=dict(
         type='ResNet',
-        depth=50,
+        depth=34,
         init_cfg=dict(
             type='Pretrained',
-            checkpoint='open-mmlab://detectron2/resnet50_caffe'),
+            # checkpoint='open-mmlab://detectron2/resnet34_caffe'
+            checkpoint='https://download.pytorch.org/models/resnet34-333f7ec4.pth'
+            ),
         num_stages=4,
         out_indices=(0, 1, 2, 3),
         frozen_stages=1,
         norm_cfg=dict(type='BN2d', requires_grad=False),
         norm_eval=True,
         style='caffe',
-        dcn=dict(type='DCNv2', deform_groups=1, fallback_on_stride=False),
-        stage_with_dcn=(False, False, True, True)),
+        # dcn=dict(type='DCNv2', deform_groups=1, fallback_on_stride=False),
+        # stage_with_dcn=(False, False, True, True)
+        ),
     img_neck=dict(
         type='FPN',
-        in_channels=[256, 512, 1024, 2048],
+        in_channels=[64, 128, 256, 512],
         out_channels=256,
         start_level=1,
         add_extra_convs='on_output',
@@ -61,6 +67,7 @@ model = dict(
         relu_before_extra_convs=True),
     pts_bbox_head=dict(
         type='Detr3DHead',
+        use_all_map=use_all_map,
         use_gt_light=use_gt_light,
         loss_weights=loss_weights,
         num_query=num_query,
@@ -80,9 +87,8 @@ model = dict(
         transformer=dict(
             type='Detr3DTransformer',
             use_wp_query = True,
-            use_bev_query = True,
+            use_bev_query = False,
             use_route_query = True,
-            use_route_query2 = False,
             route_num_attributes = 6,
             use_type_emb = True,
             wp_refine = wp_refine,
@@ -275,6 +281,7 @@ lr_config = dict(
     min_lr_ratio=1e-3)
 total_epochs = 18
 evaluation = dict(interval=3, pipeline=test_pipeline, save_best="wp", less_keys=['wp'], gpu_collect=True)
+
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 # load_from='pretrain/route.pth'
