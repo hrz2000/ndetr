@@ -41,6 +41,7 @@ from mmdet3d.utils import collect_env, get_root_logger
 from mmdet.apis import set_random_seed
 # from mmseg import __version__ as mmseg_version
 from projects.mmdet3d_plugin import *
+from projects.configs.detr3d.new.debug import debug
 print("enter3...")
 sys.stdout.flush()
 def parse_args():
@@ -171,6 +172,8 @@ def main():
     if args.resume_from is not None:
         cfg.work_dir = osp.dirname(args.resume_from)
         cfg.log_config.hooks[-1].init_kwargs.resume = True
+    if debug:
+        cfg.work_dir = './work_dirs/debug'
     cfg.log_config.hooks[-1].init_kwargs.name = cfg.work_dir
     
     assert cfg.work_dir[:2] == './', "for wandb"

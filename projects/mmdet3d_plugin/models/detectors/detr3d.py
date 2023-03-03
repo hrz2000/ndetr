@@ -64,7 +64,7 @@ class Detr3D(MVXTwoStageDetector):
                  his_withgrad=True,
                  temporal=None,
                  use_fv=True,
-                 pred_velo=False,
+                 use_flatten_feat=False,
                  **kwargs):
         super(Detr3D,
               self).__init__(pts_voxel_layer, pts_voxel_encoder,
@@ -72,16 +72,8 @@ class Detr3D(MVXTwoStageDetector):
                              img_backbone, pts_backbone, img_neck, pts_neck,
                              pts_bbox_head, img_roi_head, img_rpn_head,
                              train_cfg, test_cfg, pretrained)
-        self.pred_velo = pred_velo
-        if self.pred_velo:
-            self.speed_branch = nn.Sequential(
-                    nn.Linear(1000, 256),
-                    nn.ReLU(inplace=True),
-                    nn.Linear(256, 256),
-                    nn.Dropout2d(p=0.5),
-                    nn.ReLU(inplace=True),
-                    nn.Linear(256, 1),
-                )
+        self.use_flatten_feat = use_flatten_feat
+        if self.use_flatten_feat:
             if img_backbone['depth'] <= 34:
                 self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
                 self.fc = nn.Linear(512, 1000)
@@ -129,10 +121,10 @@ class Detr3D(MVXTwoStageDetector):
                       **kawrgs):
         if self.temporal == None:
             if self.use_fv == True:
-                img_feats, pred_speed = self.extract_feat(img=img, img_metas=img_metas)
+                img_feats, flatten_feat = self.extract_feat(img=img, img_metas=img_metas)
             else:
                 img_feats = None
-            pts_ret = self.forward_pts_train(img_feats, gt_bboxes_3d, gt_labels_3d, img_metas, pred_speed=pred_speed)
+            pts_ret = self.forward_pts_train(img_feats, gt_bboxes_3d, gt_labels_3d, img_metas, flatten_feat=flatten_feat)
             outs = pts_ret['outs']
             losses = pts_ret['losses']
             
@@ -245,7 +237,7 @@ class Detr3D(MVXTwoStageDetector):
                 img = self.grid_mask(img)
 
             img_feats = self.img_backbone(img)
-            if self.pred_velo:
+            if self.use_flatten_feat:
                 assert len_queue == None, 'unimpletment'
                 x_layer4 = img_feats[-1]
                 BN, C, H, W = x_layer4.size()
@@ -254,9 +246,9 @@ class Detr3D(MVXTwoStageDetector):
                 x = self.avgpool(x_layer4)
                 x = torch.flatten(x, 1)
                 x = self.fc(x)
-                pred_speed = self.speed_branch(x)
+                flatten_feat = x
             else:
-                pred_speed = None
+                flatten_feat = None
             if isinstance(img_feats, dict):
                 img_feats = list(img_feats.values())
         else:
@@ -271,26 +263,26 @@ class Detr3D(MVXTwoStageDetector):
                 img_feats_reshaped.append(img_feat.view(int(B/len_queue), len_queue, int(BN / B), C, H, W))
             else:
                 img_feats_reshaped.append(img_feat.view(B, int(BN / B), C, H, W))
-        return img_feats_reshaped, pred_speed
+        return img_feats_reshaped, flatten_feat
 
     @auto_fp16(apply_to=('img'))
     def extract_feat(self, img, img_metas=None, len_queue=None):
         """Extract features from images and points."""
 
-        img_feats, pred_speed = self.extract_img_feat(img, img_metas, len_queue=len_queue) # 不经过backbone的特征
+        img_feats, flatten_feat = self.extract_img_feat(img, img_metas, len_queue=len_queue) # 不经过backbone的特征
         
-        return img_feats, pred_speed
+        return img_feats, flatten_feat
 
     def forward_pts_train(self,
                           pts_feats,
                           gt_bboxes_3d,
                           gt_labels_3d,
                           img_metas,
-                          pred_speed=None,
+                          flatten_feat=None,
                           prev_query=None,
                           gt_bboxes_ignore=None):
-        outs, hs = self.pts_bbox_head(pts_feats, img_metas, prev_query=prev_query)
-        outs['speed'] = pred_speed
+        outs, hs = self.pts_bbox_head(pts_feats, img_metas, prev_query=prev_query, flatten_feat=flatten_feat)
+        # outs['speed'] = pred_speed
         if gt_bboxes_3d is not None:
             loss_inputs = [img_metas, gt_bboxes_3d, gt_labels_3d, outs]
             losses, new_gt_idxs_list_layers = self.pts_bbox_head.loss(*loss_inputs)

@@ -1,5 +1,8 @@
 from projects.configs.detr3d.new.common import *
 
+feat_init = True
+pred_speed = True
+
 find_unused_parameters=True
 use_all_map=False
 use_gt_light=False
@@ -14,8 +17,8 @@ workers=4
 lr=2e-4
 num_query=50
 
-wp_refine='gru' # gru, linear, None
-wp_refine_input_last=True
+wp_refine=None # gru, linear, None
+wp_refine_input_last=False
 
 gru_use_box=0
 velo_update=False
@@ -38,7 +41,7 @@ temporal=None
 model = dict(
     type='Detr3D',
     use_grid_mask=True,
-    pred_velo=loss_weights['loss_speed']!=0,
+    use_flatten_feat=loss_weights['loss_speed']!=0,
     temporal=temporal,
     img_backbone=dict(
         type='ResNet',
@@ -87,6 +90,7 @@ model = dict(
         enable_uncertainty_loss_weight = enable_uncertainty_loss_weight,
         transformer=dict(
             type='Detr3DTransformer',
+            feat_init = feat_init,
             use_wp_query = True,
             use_bev_query = False,
             use_route_query = True,

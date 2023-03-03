@@ -274,8 +274,10 @@ class Detr3DHead(DETRHead):
                 all_layers = False,
                 use_batch_weights = False,
                 gt_use_meanlayers_attn = False,
+                pred_speed = False,
                  **kwargs
                  ):
+        self.pred_speed = pred_speed
         self.gt_use_meanlayers_attn = gt_use_meanlayers_attn
         self.use_batch_weights = use_batch_weights
         self.all_layers = all_layers
@@ -326,6 +328,24 @@ class Detr3DHead(DETRHead):
 
     def _init_layers(self):
         """Initialize classification branch and regression branch of head."""
+        if self.pred_speed:
+            # self.speed_branch = nn.Sequential(
+            #                     nn.Linear(1000, 256),
+            #                     nn.ReLU(inplace=True),
+            #                     nn.Linear(256, 256),
+            #                     nn.Dropout2d(p=0.5),
+            #                     nn.ReLU(inplace=True),
+            #                     nn.Linear(256, 1),
+            #                 )        
+            self.speed_branch = nn.Sequential(
+                                nn.Linear(256, 128),
+                                nn.ReLU(inplace=True),
+                                nn.Linear(128, 128),
+                                nn.Dropout2d(p=0.5),
+                                nn.ReLU(inplace=True),
+                                nn.Linear(128, 1),
+                            )
+
         cls_branch = []
         for _ in range(self.num_reg_fcs):
             cls_branch.append(Linear(self.embed_dims, self.embed_dims))
@@ -415,7 +435,7 @@ class Detr3DHead(DETRHead):
             for m in self.cls_branches:
                 nn.init.constant_(m[-1].bias, bias_init)
 
-    def forward(self, mlvl_feats, img_metas, prev_query=None, only_query=False):
+    def forward(self, mlvl_feats, img_metas, prev_query=None, only_query=False, flatten_feat=None):
         tp_batch = torch.tensor(np.stack([m['plan']['tp'] for m in img_metas],axis=0)).to('cuda').to(torch.float32)
         light_batch = torch.tensor(np.stack([m['plan']['light'] for m in img_metas],axis=0)).reshape(-1,1).to('cuda').to(torch.float32)
         cmd_batch = torch.tensor(np.stack([m['plan']['command'] for m in img_metas],axis=0)).reshape(-1,1).to('cuda').to(torch.float32)
@@ -442,6 +462,7 @@ class Detr3DHead(DETRHead):
             cmd_batch=cmd_batch,
             route_batch=route_batch,
             batch_npred_bbox=batch_npred_bbox,
+            flatten_feat=flatten_feat,
         )
 
         hs, init_reference, inter_references, init_reference2, inter_references2, all_attnmap = outputs
@@ -498,31 +519,17 @@ class Detr3DHead(DETRHead):
         
         outs=dict(all_cls_scores=outputs_classes, all_bbox_preds=outputs_coords)
         batch_pts_boxes = self.get_only_bboxes(outs=outs, img_metas=img_metas)
-        # 这里会获取一次box
-        
-        # assert self.gru_use_box == False, 'box length bug'
-        if self.gru_use_box:
-            # 计算未来时刻的box位置、预测waypoint
-            outputs_wps = []
-            wp_embs = hs[:,:,self.wp_query_pos,:] # torch.Size([6, 2, 256])
-            box_batch = self.get_box_batch(batch_pts_boxes) # 只拿最后一层预测来解码box, (bs, num_box, ndim=10)
-            for lvl in range(wp_embs.shape[0]): # torch.Size([6, 2, 256])
-                outputs_wp = self.wp_decoder(refine_wp_layers[lvl], wp_embs[lvl], tp_batch, light_batch, cmd_batch, box_batch)
-                outputs_wps.append(outputs_wp)
-            all_wp_preds = torch.stack(outputs_wps) # torch.Size([6, 1, 4, 2]), lidar系
-        else:
-            if self.wp_refine:
-                all_wp_preds = refine_wp_layers
-                refine_wp_layers = None
-            else:
-                outputs_wps = []
-                wp_embs = hs[:,:,self.wp_query_pos,:] # torch.Size([6, 2, 256])
-                box_batch = None # 只拿最后一层预测来解码box, (bs, num_box, ndim=10)
-                for lvl in range(wp_embs.shape[0]): # torch.Size([6, 2, 256])
-                    outputs_wp = self.wp_decoder(refine_wp_layers[lvl], wp_embs[lvl], tp_batch, light_batch, cmd_batch, box_batch)
-                    outputs_wps.append(outputs_wp)
-                all_wp_preds = torch.stack(outputs_wps) # torch.Size([6, 1, 4, 2]), lidar系
-                # assert False, "no cross_attn"
+        box_batch = self.get_box_batch(batch_pts_boxes) if self.gru_use_box else None
+        outputs_wps = []
+        wp_embs = hs[:,:,self.wp_query_pos,:] # torch.Size([6, 2, 256])
+        for lvl in range(wp_embs.shape[0]): # torch.Size([6, 2, 256])
+            outputs_wp = self.wp_decoder(refine_wp_layers[lvl], wp_embs[lvl], tp_batch, light_batch, cmd_batch, box_batch)
+            outputs_wps.append(outputs_wp)
+        all_wp_preds = torch.stack(outputs_wps) # torch.Size([6, 1, 4, 2]), lidar系
+        assert self.wp_refine == None
+
+        # import pdb;pdb.set_trace()
+        pred_speed = self.speed_branch(wp_embs.mean(0)) if self.pred_speed else None
             
         # 计算route_wp、iscollide
         for batch_id, pts_bbox in enumerate(batch_pts_boxes):
@@ -551,6 +558,8 @@ class Detr3DHead(DETRHead):
             'route_wp': route_wp,
             'iscollide': iscollide,
             'tp': tp_batch,
+            
+            'speed': pred_speed
         }
         return outs, hs
 

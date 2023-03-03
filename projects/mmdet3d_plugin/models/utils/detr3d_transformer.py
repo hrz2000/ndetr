@@ -39,9 +39,11 @@ class Detr3DTransformer(BaseModule):
                 temporal = None,
                 route_mask = 0.0,
                 no_route = False,
+                feat_init = False,
                  **kwargs):
         
         super(Detr3DTransformer, self).__init__(**kwargs)
+        self.feat_init = feat_init
         self.route_mask = route_mask
         self.no_route = no_route
         
@@ -82,7 +84,10 @@ class Detr3DTransformer(BaseModule):
             if self.use_type_emb:
                 self.route_type_emb = nn.Embedding(1, self.embed_dims)
         if self.use_wp_query:
-            self.wp_emb = nn.Embedding(1, self.embed_dims*2)
+            if self.feat_init:
+                self.wp_emb_proj = nn.Linear(1000, self.embed_dims*2)
+            else:
+                self.wp_emb = nn.Embedding(1, self.embed_dims*2)
             if self.use_type_emb:
                 self.wp_type_emb = nn.Embedding(1, self.embed_dims)
         self.wp_query_pos = 0
@@ -141,7 +146,7 @@ class Detr3DTransformer(BaseModule):
                 m.init_weight()
         xavier_init(self.reference_points, distribution='uniform', bias=0.)
     
-    def concat_other_query(self, query, query_pos, img_metas, bs):
+    def concat_other_query(self, query, query_pos, img_metas, bs, flatten_feat):
         if self.use_type_emb:
             query = query + self.obj_type_emb.weight
 
@@ -183,8 +188,11 @@ class Detr3DTransformer(BaseModule):
             query = torch.cat([route_emb.unsqueeze(1), query],dim=1)
 
         if self.use_wp_query:
-            wp_emb = self.wp_emb.weight
-            wp_emb = wp_emb.expand(bs, -1)
+            if self.feat_init:
+                wp_emb = self.wp_emb_proj(flatten_feat)
+            else:
+                wp_emb = self.wp_emb.weight
+                wp_emb = wp_emb.expand(bs, -1)
             wp_pos, wp_emb = torch.split(wp_emb, self.embed_dims, dim=-1)
             if self.use_type_emb:
                 wp_emb = wp_emb + self.wp_type_emb.weight
@@ -231,13 +239,14 @@ class Detr3DTransformer(BaseModule):
                 cmd_batch=None,
                 route_batch=None,
                 batch_npred_bbox=None,
+                flatten_feat=None,
                 **kwargs):
         assert query_embed is not None
         bs = mlvl_feats[0].size(0)
         query_pos, query = torch.split(query_embed, self.embed_dims , dim=1)
         query_pos = query_pos.unsqueeze(0).expand(bs, -1, -1)
         query = query.unsqueeze(0).expand(bs, -1, -1)
-        query, query_pos = self.concat_other_query(query, query_pos, img_metas, bs) # torch.Size([bs=42, numq=53, 256])
+        query, query_pos = self.concat_other_query(query, query_pos, img_metas, bs, flatten_feat=flatten_feat) # torch.Size([bs=42, numq=53, 256])
         # 53=1wp+1route+1hdmap
         
         if prev_bev is not None:
