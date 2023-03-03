@@ -500,7 +500,7 @@ class Detr3DHead(DETRHead):
         batch_pts_boxes = self.get_only_bboxes(outs=outs, img_metas=img_metas)
         # 这里会获取一次box
         
-        assert self.gru_use_box == False, 'box length bug'
+        # assert self.gru_use_box == False, 'box length bug'
         if self.gru_use_box:
             # 计算未来时刻的box位置、预测waypoint
             outputs_wps = []
@@ -991,7 +991,7 @@ class Detr3DHead(DETRHead):
         return torch.tensor(batch_bool).to('cuda')
     
     def get_only_bboxes(self, outs, img_metas, rescale=False, no_filter=False):
-        preds_dicts = self.bbox_coder.decode(outs, no_filter=no_filter)
+        preds_dicts = self.bbox_coder.decode(outs, no_filter=no_filter, detach=True)
         # [dict_keys(['bboxes', 'scores', 'labels']),...]
         num_samples = len(preds_dicts)
         ret_list = []

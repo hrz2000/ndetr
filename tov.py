@@ -42,8 +42,8 @@ def image_to_video(image_path, media_path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--re', '-r', default="output/output/detr_eval_split/bs_box_attnmap/2023-02-18_10:39:45/Route_25/longest_weathers_25_route0_02_18_18_41_02_2023-02-18_18:41:28/vis/*", type=str)
-    parser.add_argument('--save', '-s', default='route2.mp4', type=str)
+    parser.add_argument('--re', '-r', default="output/output/box_wpattn_refine/2023-03-02_22:52:28/data_save_path/longest6_route0_03_02_22_52_43_2023-03-02_22:52:56/vis/*", type=str)
+    parser.add_argument('--save', '-s', default='route0.mp4', type=str)
     arg = parser.parse_args()
     image_to_video(arg.re, arg.save)
     print("ok")

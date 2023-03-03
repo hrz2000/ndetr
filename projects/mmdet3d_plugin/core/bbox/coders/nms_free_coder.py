@@ -107,7 +107,7 @@ class NMSFreeCoder(BaseBBoxCoder):
                 'support post_center_range is not None for now!')
         return predictions_dict
 
-    def decode(self, preds_dicts, no_filter):
+    def decode(self, preds_dicts, no_filter, detach=False):
         """Decode bboxes.
         Args:
             all_cls_scores (Tensor): Outputs from the classification head, \
@@ -122,6 +122,10 @@ class NMSFreeCoder(BaseBBoxCoder):
         all_cls_scores = preds_dicts['all_cls_scores'][-1]
         all_bbox_preds = preds_dicts['all_bbox_preds'][-1]
         # 拿到最后一层，只在最后一层解码
+        
+        if detach:
+            all_cls_scores = all_cls_scores.detach()
+            all_bbox_preds = all_bbox_preds.detach()
         
         batch_size = all_cls_scores.size()[0]
         predictions_list = []
