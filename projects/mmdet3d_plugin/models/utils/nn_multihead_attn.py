@@ -18,9 +18,6 @@ class _LinearWithBias(Linear):
     def __init__(self, in_features: int, out_features: int) -> None:
         super().__init__(in_features, out_features, bias=True)  # type: ignore
 
-# class MultiheadAttention_my(MultiheadAttention): # TODO: 这种最好不要
-#     pass
-
 class NNMultiheadAttention_my(Module):
     r"""Allows the model to jointly attend to information
     from different representation subspaces.
