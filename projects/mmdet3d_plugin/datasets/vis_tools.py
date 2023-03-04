@@ -322,13 +322,14 @@ def create_bev(pred_pts_bbox, gt_pts_bbox, PIXELS_PER_METER = 5, size = (300,300
                 fill_c = 'orange' if box_type_idx==0 else 'royalblue'
                 draw.line((endx1, endy1, endx2, endy2), fill=fill_c, width=1)
                 
-                if box_type_idx == 1 and select_idx is not None:
-                    query_idx = int(select_idx[idx])
-                    draw.text((endx1+10, endy1+10), f"{query_idx}", fill='springgreen')
-                    attn_list = all_attnmap[query_idx].detach().cpu().numpy()
-                    cls_emb = attn_list[0]
-                    mean_emb = attn_list[2:].mean()
-                    draw.text((endx1+15, endy1+10), f"{cls_emb:.2f},{mean_emb:.2f}", fill='springgreen')
+                # # 展示query_id
+                # if box_type_idx == 1 and select_idx is not None:
+                #     query_idx = int(select_idx[idx])
+                #     draw.text((endx1+10, endy1+10), f"{query_idx}", fill='springgreen')
+                #     attn_list = all_attnmap[query_idx].detach().cpu().numpy()
+                #     cls_emb = attn_list[0]
+                #     mean_emb = attn_list[2:].mean()
+                #     draw.text((endx1+15, endy1+10), f"{cls_emb:.2f},{mean_emb:.2f}", fill='springgreen')
                 
                 if box_type_idx==1: # 预测
                     if wp_attn is not None:

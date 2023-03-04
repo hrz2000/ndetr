@@ -171,7 +171,7 @@ def main():
     
     if args.resume_from is not None:
         cfg.work_dir = osp.dirname(args.resume_from)
-        cfg.log_config.hooks[-1].init_kwargs.resume = True
+        cfg.log_config.hooks[-1].init_kwargs.resume = 'auto'
     if debug:
         cfg.work_dir = './work_dirs/debug'
     cfg.log_config.hooks[-1].init_kwargs.name = cfg.work_dir
