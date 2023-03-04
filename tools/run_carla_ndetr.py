@@ -40,7 +40,7 @@ repetitions=1
 
 
 # save_path=osp.join('./output/output', osp.splitext(osp.basename(config))[0])+ "/" + time.strftime('%Y-%m-%d_%H:%M:%S')
-save_path='output/output/box_wpattn_refine/2023-03-02_22:52:28'
+save_path='test/box_wpattn_refine/2023-03-02_22:52:28'
 # save_path='output/output/bs_box_wpattn_norouteandmap/2023-02-24_23:00:18'
 
 # p = subprocess.Popen(f"SDL_VIDEODRIVER=offscreen $CARLA_SERVER -carla-rpc-port=20{port} -nosound -opengl", shell=True)

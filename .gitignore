@@ -38,6 +38,7 @@ __pycache__/
 /wandb
 /mp4*
 /_*
+/test*
 
 # C extensions
 *.so

@@ -24,7 +24,7 @@ checkpoint='pretrain/cross_attn.pth'
 # config="projects/configs/detr3d/new/bs_box_wpattn_new_weights.py"
 # checkpoint='work_dirs/bs_box_wpattn_new_weights/2023-02-25_22:51:49/epoch_18.pth'
 name = osp.splitext(osp.basename(config))[0]
-save_path='output/output/detr_eval_split' + f"/{name}/" + time.strftime('%Y-%m-%d_%H:%M:%S')
+save_path='test/detr_eval_split' + f"/{name}/" + time.strftime('%Y-%m-%d_%H:%M:%S')
 
 track='MAP'
 
