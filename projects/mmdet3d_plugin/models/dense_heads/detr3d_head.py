@@ -24,217 +24,6 @@ from projects.mmdet3d_plugin.datasets.vis_tools import create_bev, create_collid
 from mmcv.parallel import DataContainer as DC
 import time
 
-class Comfort():
-    def __init__(self):
-        self.c_lat_acc = 3 # m/s2
-        self.c_lon_acc = 3 # m/s2
-        self.c_jerk = 1 # m/s3
-
-        self.factor = 0.1
-
-    def __call__(self, trajs):
-        '''
-        trajs: torch.Tensor<float> (B, N, n_future, 2)
-        '''
-        B, N, n_future, _ = trajs.shape
-        lateral_velocity = torch.zeros((B,N,n_future), device=trajs.device)
-        longitudinal_velocity = torch.zeros((B, N, n_future), device=trajs.device)
-        lateral_acc = torch.zeros((B,N,n_future), device=trajs.device)
-        longitudinal_acc = torch.zeros((B,N,n_future), device=trajs.device)
-        for i in range(n_future):
-            if i == 0:
-                lateral_velocity[:,:,i] = trajs[:,:,i,0] / 0.5
-                longitudinal_velocity[:,:,i] = trajs[:,:,i,1] / 0.5
-            else:
-                lateral_velocity[:,:,i] = (trajs[:,:,i,0] - trajs[:,:,i-1,0]) / 0.5
-                longitudinal_velocity[:,:,i] = (trajs[:,:,i,1] - trajs[:,:,i-1,1]) / 0.5
-        for i in range(1, n_future):
-            lateral_acc[:,:,i] = (lateral_velocity[:,:,i] - lateral_velocity[:,:,i-1]) / 0.5
-            longitudinal_acc[:,:,i] = (longitudinal_velocity[:,:,i] - longitudinal_velocity[:,:,i-1]) / 0.5
-        lateral_acc, _ = torch.abs(lateral_acc).max(dim=-1)
-        longitudinal_acc, _ = torch.abs(longitudinal_acc).max(dim=-1)
-        # v^2 - v_0^2 = 2ax
-        # lateral_acc = (lateral_velocity[:,:,-1] ** 2 - lateral_velocity[:,:,0] ** 2) / (2 * (trajs[:,:,-1,0] - trajs[:,:,0,0]))
-        # longitudinal_acc = (longitudinal_velocity[:,:,-1] ** 2 - longitudinal_velocity[:,:,0] ** 2) / (2 * (trajs[:,:,-1,1] - trajs[:,:,0,1]))
-        # index = torch.isnan(lateral_acc)
-        # lateral_acc[index] = 0.0
-        # index = torch.isnan(longitudinal_acc)
-        # longitudinal_acc[index] = 0.0
-
-        # jerk
-        ego_velocity = torch.zeros((B, N, n_future), device=trajs.device)
-        ego_acc = torch.zeros((B,N,n_future), device=trajs.device)
-        ego_jerk = torch.zeros((B,N,n_future), device=trajs.device)
-        for i in range(n_future):
-            if i == 0:
-                ego_velocity[:, :, i] = torch.sqrt((trajs[:, :, i] ** 2).sum(dim=-1)) / 0.5
-            else:
-                ego_velocity[:, :, i] = torch.sqrt(((trajs[:, :, i] - trajs[:, :, i - 1]) ** 2).sum(dim=-1)) / 0.5
-        for i in range(1, n_future):
-            ego_acc[:,:,i] = (ego_velocity[:,:,i] - ego_velocity[:,:,i-1]) / 0.5
-        for i in range(2, n_future):
-            ego_jerk[:,:,i] = (ego_acc[:,:,i] - ego_acc[:,:,i-1]) / 0.5
-        ego_jerk,_ = torch.abs(ego_jerk).max(dim=-1)
-
-        subcost = torch.zeros((B, N), device=trajs.device)
-
-        lateral_acc = torch.clamp(torch.abs(lateral_acc) - self.c_lat_acc, 0,30)
-        subcost += lateral_acc ** 2
-        longitudinal_acc = torch.clamp(torch.abs(longitudinal_acc) - self.c_lon_acc, 0, 30)
-        subcost += longitudinal_acc ** 2
-        ego_jerk = torch.clamp(torch.abs(ego_jerk) - self.c_jerk, 0, 20)
-        subcost += ego_jerk ** 2
-
-        return subcost * self.factor
-
-class Progress():
-    def __init__(self):
-        self.factor = 0.5
-
-    def __call__(self, trajs, target_points):
-        '''
-        trajs: torch.Tensor<float> (B, N, n_future, 2)
-        target_points: torch.Tensor<float> (B, 2)
-        '''
-        B, N, n_future, _ = trajs.shape
-        subcost1, _ = trajs[:,:,:,1].max(dim=-1) # 选择前后坐标最靠上的值(在4个未来时刻中取max)
-
-        if target_points.sum() < 0.5:
-            subcost2 = 0
-        else:
-            trajs = trajs[:,:,-1] # (B, N, 2)
-            target_points = target_points.unsqueeze(1)
-            subcost2 = ((trajs - target_points) ** 2).sum(dim=-1)
-
-        return (subcost2 - subcost1) * self.factor
-
-class Wp_grurefine(nn.Module):
-    def __init__(self, head):
-        super(Wp_grurefine, self).__init__() # loss_cfg在里面
-        self.pred_len = head.pred_len
-        self.use_cmd = head.use_cmd
-        self.use_proj = head.use_proj
-        self.gru_use_box = head.gru_use_box
-        self.wp_refine_input_last = head.wp_refine_input_last
-        n_embd = head.transformer.embed_dims
-        query_size = 64
-        hidden_size = 64+1 # light
-        input_size = 2 + 2 # cp, tp
-        if self.use_cmd:
-            hidden_size += 1 # command
-        if self.wp_refine_input_last:
-            input_size += 2
-        if self.gru_use_box:
-            input_size += self.gru_use_box * 10 # 9+1
-            # input_size += self.gru_use_box * 7 # 9dim+1scores
-            # 之前也是*10，是reg的输出；现在是9+1
-        self.wp_head = nn.Linear(n_embd, query_size)
-        self.wp_decoder = nn.GRUCell(input_size=input_size, hidden_size=hidden_size)
-        self.wp_relu = nn.ReLU()
-        self.wp_output = nn.Linear(hidden_size, 2)
-        if self.use_proj:
-            self.wp_proj = nn.Linear(64+1+2+2, 2)#隐藏维度，红绿灯，tp，当前点
-
-    def forward(self, x_last, cls_emb, tp_batch, light_batch, cmd_batch, batch_npred_bbox):
-        if not self.gru_use_box:
-            batch_npred_bbox = None
-        
-        bs = len(cls_emb)
-        z = self.wp_head(cls_emb) # bs,256->64
-            
-        if self.use_cmd:
-            z = torch.cat((z, light_batch, cmd_batch), 1) # torch.Size([bs, 64+1+1])
-        else:
-            z = torch.cat((z, light_batch), 1)
-        output_wp = list()
-        x = z.new_zeros(size=(z.shape[0], 2))
-
-        for idx_npred in range(self.pred_len): # 4
-            if self.use_proj:
-                x_in = torch.cat([z, x, tp_batch], dim=1)
-                dx = self.wp_proj(x_in)
-                x = dx + x
-                output_wp.append(x)
-            else:
-                x_in = torch.cat([x, tp_batch], dim=1) # bs,(2+2)
-                if self.wp_refine_input_last:
-                    x_in = torch.cat([x_in, x_last[:,idx_npred]], dim=1)
-                if self.gru_use_box and batch_npred_bbox is not None:
-                    x_in = torch.cat([x_in, batch_npred_bbox[:, :, idx_npred].reshape(bs, -1)], dim=1) # bs, num_box, npred, 10d
-                z = self.wp_decoder(x_in, z) # torch.Size([1, 65])
-                dx = self.wp_output(z) # torch.Size([1, 2])
-                x = dx + x
-                output_wp.append(x)
-
-        pred_wp = torch.stack(output_wp, dim=1) # bs,4,2
-        pred_wp[:, :, 0] -= 1.3 # 变成了lidar系
-        return pred_wp
-
-class Wp_refine(nn.Module):
-    def __init__(self, head):
-        self.num_reg_fcs = head.num_reg_fcs
-        self.embed_dims = head.transformer.embed_dims
-        super(Wp_refine, self).__init__() # loss_cfg在里面
-        wp_branch = []
-        for _ in range(self.num_reg_fcs):
-            wp_branch.append(Linear(self.embed_dims, self.embed_dims))
-            wp_branch.append(nn.ReLU())
-        wp_branch.append(Linear(self.embed_dims, 8))
-        self.wp_branch = nn.Sequential(*wp_branch)
-    
-    def forward(self, cls_emb, tp_batch=None, light_batch=None, cmd_batch=None, batch_npred_bbox=None):
-        bs = len(cls_emb)
-        return self.wp_branch(cls_emb).reshape(bs, 4, 2)
-        
-    # def init_weights(self):
-    #     """Initialize weights of the DeformDETR head."""
-    #     self.transformer.init_weights()
-    #     if self.loss_cls.use_sigmoid:
-    #         bias_init = bias_init_with_prob(0.01)
-    #         for m in self.cls_branches:
-    #             nn.init.constant_(m[-1].bias, bias_init)
-
-class Penalty():
-    def __init__(self, 
-                use_route_penalty=False,
-                use_collide_penalty=False,
-                use_comfort_penalty=False,
-                use_progress_penalty=False,
-                 ):
-        self.use_route_penalty=use_route_penalty
-        self.use_collide_penalty=use_collide_penalty
-        self.use_comfort_penalty=use_comfort_penalty
-        self.use_progress_penalty=use_progress_penalty
-        if self.use_comfort_penalty:
-            self.comfort = Comfort()
-        if self.use_progress_penalty:
-            self.progress = Progress()
-    
-    def __call__(self, pred_wp, route_wp, iscollide, tp, losses, head):
-        if self.use_route_penalty:
-            losses_wp = F.l1_loss(pred_wp, route_wp, reduction='none').mean([1,2,3]) # 剩下不同layer了
-            losses_wp = losses_wp.mean()
-            losses.update(head.loss_add_prefix({"loss":losses_wp}, 'route_penalty'))
-        
-        if self.use_collide_penalty:
-            expect_wp = pred_wp.clone() # torch.Size([6, 1, 4, 2])
-            expect_wp[:,iscollide,...] = 0 
-            losses_wp = F.l1_loss(pred_wp, expect_wp, reduction='none').mean([1,2,3])
-            losses_wp = losses_wp.mean()
-            losses.update(head.loss_add_prefix({"loss":losses_wp}, 'collide_penalty'))
-        
-        if self.use_comfort_penalty:
-            # pred_wp torch.Size([layer=6, bs=2, npred=4, xy=2])
-            trajs = pred_wp.clone().permute(1,0,2,3)
-            loss = self.comfort(trajs).mean()/5 # torch.Size([2, 6]) 2个bs，6个层的轨迹的舒适度
-            losses.update(head.loss_add_prefix({"loss":loss}, 'comfort_penalty'))
-
-        if self.use_progress_penalty:
-            # pred_wp
-            trajs = pred_wp.clone().permute(1,0,2,3) # (B,1,n_future)
-            loss = self.progress(trajs, tp).mean()/300 # torch.Size([2, 6]) 刚开始时候特别大
-            losses.update(head.loss_add_prefix({"loss":loss}, 'progress_penalty'))
-
 @HEADS.register_module()
 class Detr3DHead(DETRHead):
     """Head of Detr3D. 
@@ -275,8 +64,10 @@ class Detr3DHead(DETRHead):
                 use_batch_weights = False,
                 gt_use_meanlayers_attn = False,
                 pred_speed = False,
+                use_intend = False,
                  **kwargs
                  ):
+        self.use_intend = use_intend
         self.pred_speed = pred_speed
         self.gt_use_meanlayers_attn = gt_use_meanlayers_attn
         self.use_batch_weights = use_batch_weights
@@ -601,41 +392,6 @@ class Detr3DHead(DETRHead):
                 # 8代表的是上下方向，对应0位置
                 
         return box_batch
-    
-    # def queries2outs(self, queries):
-    #     pass
-    
-    # def pred_waypoint_per_layer(self, cls_emb, tp_batch, light_batch, cmd_batch, batch_npred_bbox):
-    #     if not self.gru_use_box:
-    #         batch_npred_bbox = None
-        
-    #     bs = len(cls_emb)
-    #     z = self.wp_head(cls_emb) # bs,256->64
-    #     if self.use_cmd:
-    #         z = torch.cat((z, light_batch, cmd_batch), 1) # torch.Size([bs, 64+1+1])
-    #     else:
-    #         z = torch.cat((z, light_batch), 1)
-    #     output_wp = list()
-    #     x = z.new_zeros(size=(z.shape[0], 2))
-
-    #     for idx_npred in range(self.pred_len): # 4
-    #         if self.use_proj:
-    #             x_in = torch.cat([z, x, tp_batch], dim=1)
-    #             dx = self.wp_proj(x_in)
-    #             x = dx + x
-    #             output_wp.append(x)
-    #         else:
-    #             x_in = torch.cat([x, tp_batch], dim=1) # bs,(2+2)
-    #             if self.gru_use_box:
-    #                 x_in = torch.cat([x_in, batch_npred_bbox[:, :, idx_npred].reshape(bs, -1)], dim=1) # bs, num_box, npred, 10d
-    #             z = self.wp_decoder(x_in, z) # torch.Size([1, 65])
-    #             dx = self.wp_output(z) # torch.Size([1, 2])
-    #             x = dx + x
-    #             output_wp.append(x)
-
-    #     pred_wp = torch.stack(output_wp, dim=1) # bs,4,2
-    #     pred_wp[:, :, 0] -= 1.3 # 变成了lidar系
-    #     return pred_wp
 
     def _get_target_single(self,
                            cls_score,
@@ -1187,3 +943,214 @@ def sigmoid_focal_loss(inputs, targets, num_masks=None, alpha: float = 0.25, gam
         return loss.mean(1).sum()
     else:
         return loss.mean(1).sum() / num_masks
+    
+class Comfort():
+    def __init__(self):
+        self.c_lat_acc = 3 # m/s2
+        self.c_lon_acc = 3 # m/s2
+        self.c_jerk = 1 # m/s3
+
+        self.factor = 0.1
+
+    def __call__(self, trajs):
+        '''
+        trajs: torch.Tensor<float> (B, N, n_future, 2)
+        '''
+        B, N, n_future, _ = trajs.shape
+        lateral_velocity = torch.zeros((B,N,n_future), device=trajs.device)
+        longitudinal_velocity = torch.zeros((B, N, n_future), device=trajs.device)
+        lateral_acc = torch.zeros((B,N,n_future), device=trajs.device)
+        longitudinal_acc = torch.zeros((B,N,n_future), device=trajs.device)
+        for i in range(n_future):
+            if i == 0:
+                lateral_velocity[:,:,i] = trajs[:,:,i,0] / 0.5
+                longitudinal_velocity[:,:,i] = trajs[:,:,i,1] / 0.5
+            else:
+                lateral_velocity[:,:,i] = (trajs[:,:,i,0] - trajs[:,:,i-1,0]) / 0.5
+                longitudinal_velocity[:,:,i] = (trajs[:,:,i,1] - trajs[:,:,i-1,1]) / 0.5
+        for i in range(1, n_future):
+            lateral_acc[:,:,i] = (lateral_velocity[:,:,i] - lateral_velocity[:,:,i-1]) / 0.5
+            longitudinal_acc[:,:,i] = (longitudinal_velocity[:,:,i] - longitudinal_velocity[:,:,i-1]) / 0.5
+        lateral_acc, _ = torch.abs(lateral_acc).max(dim=-1)
+        longitudinal_acc, _ = torch.abs(longitudinal_acc).max(dim=-1)
+        # v^2 - v_0^2 = 2ax
+        # lateral_acc = (lateral_velocity[:,:,-1] ** 2 - lateral_velocity[:,:,0] ** 2) / (2 * (trajs[:,:,-1,0] - trajs[:,:,0,0]))
+        # longitudinal_acc = (longitudinal_velocity[:,:,-1] ** 2 - longitudinal_velocity[:,:,0] ** 2) / (2 * (trajs[:,:,-1,1] - trajs[:,:,0,1]))
+        # index = torch.isnan(lateral_acc)
+        # lateral_acc[index] = 0.0
+        # index = torch.isnan(longitudinal_acc)
+        # longitudinal_acc[index] = 0.0
+
+        # jerk
+        ego_velocity = torch.zeros((B, N, n_future), device=trajs.device)
+        ego_acc = torch.zeros((B,N,n_future), device=trajs.device)
+        ego_jerk = torch.zeros((B,N,n_future), device=trajs.device)
+        for i in range(n_future):
+            if i == 0:
+                ego_velocity[:, :, i] = torch.sqrt((trajs[:, :, i] ** 2).sum(dim=-1)) / 0.5
+            else:
+                ego_velocity[:, :, i] = torch.sqrt(((trajs[:, :, i] - trajs[:, :, i - 1]) ** 2).sum(dim=-1)) / 0.5
+        for i in range(1, n_future):
+            ego_acc[:,:,i] = (ego_velocity[:,:,i] - ego_velocity[:,:,i-1]) / 0.5
+        for i in range(2, n_future):
+            ego_jerk[:,:,i] = (ego_acc[:,:,i] - ego_acc[:,:,i-1]) / 0.5
+        ego_jerk,_ = torch.abs(ego_jerk).max(dim=-1)
+
+        subcost = torch.zeros((B, N), device=trajs.device)
+
+        lateral_acc = torch.clamp(torch.abs(lateral_acc) - self.c_lat_acc, 0,30)
+        subcost += lateral_acc ** 2
+        longitudinal_acc = torch.clamp(torch.abs(longitudinal_acc) - self.c_lon_acc, 0, 30)
+        subcost += longitudinal_acc ** 2
+        ego_jerk = torch.clamp(torch.abs(ego_jerk) - self.c_jerk, 0, 20)
+        subcost += ego_jerk ** 2
+
+        return subcost * self.factor
+
+class Progress():
+    def __init__(self):
+        self.factor = 0.5
+
+    def __call__(self, trajs, target_points):
+        '''
+        trajs: torch.Tensor<float> (B, N, n_future, 2)
+        target_points: torch.Tensor<float> (B, 2)
+        '''
+        B, N, n_future, _ = trajs.shape
+        subcost1, _ = trajs[:,:,:,1].max(dim=-1) # 选择前后坐标最靠上的值(在4个未来时刻中取max)
+
+        if target_points.sum() < 0.5:
+            subcost2 = 0
+        else:
+            trajs = trajs[:,:,-1] # (B, N, 2)
+            target_points = target_points.unsqueeze(1)
+            subcost2 = ((trajs - target_points) ** 2).sum(dim=-1)
+
+        return (subcost2 - subcost1) * self.factor
+
+class Wp_grurefine(nn.Module):
+    def __init__(self, head):
+        super(Wp_grurefine, self).__init__() # loss_cfg在里面
+        self.pred_len = head.pred_len
+        self.use_cmd = head.use_cmd
+        self.use_proj = head.use_proj
+        self.gru_use_box = head.gru_use_box
+        self.wp_refine_input_last = head.wp_refine_input_last
+        n_embd = head.transformer.embed_dims
+        query_size = 64
+        hidden_size = 64+1 # light
+        input_size = 2 + 2 # cp, tp
+        if self.use_cmd:
+            hidden_size += 1 # command
+        if self.wp_refine_input_last:
+            input_size += 2
+        if self.gru_use_box:
+            input_size += self.gru_use_box * 10 # 9+1
+            # input_size += self.gru_use_box * 7 # 9dim+1scores
+            # 之前也是*10，是reg的输出；现在是9+1
+        self.wp_head = nn.Linear(n_embd, query_size)
+        self.wp_decoder = nn.GRUCell(input_size=input_size, hidden_size=hidden_size)
+        self.wp_relu = nn.ReLU()
+        self.wp_output = nn.Linear(hidden_size, 2)
+        if self.use_proj:
+            self.wp_proj = nn.Linear(64+1+2+2, 2)#隐藏维度，红绿灯，tp，当前点
+
+    def forward(self, x_last, cls_emb, tp_batch, light_batch, cmd_batch, batch_npred_bbox):
+        if not self.gru_use_box:
+            batch_npred_bbox = None
+        
+        bs = len(cls_emb)
+        z = self.wp_head(cls_emb) # bs,256->64
+            
+        if self.use_cmd:
+            z = torch.cat((z, light_batch, cmd_batch), 1) # torch.Size([bs, 64+1+1])
+        else:
+            z = torch.cat((z, light_batch), 1)
+        output_wp = list()
+        x = z.new_zeros(size=(z.shape[0], 2))
+
+        for idx_npred in range(self.pred_len): # 4
+            if self.use_proj:
+                x_in = torch.cat([z, x, tp_batch], dim=1)
+                dx = self.wp_proj(x_in)
+                x = dx + x
+                output_wp.append(x)
+            else:
+                x_in = torch.cat([x, tp_batch], dim=1) # bs,(2+2)
+                if self.wp_refine_input_last:
+                    x_in = torch.cat([x_in, x_last[:,idx_npred]], dim=1)
+                if self.gru_use_box and batch_npred_bbox is not None:
+                    x_in = torch.cat([x_in, batch_npred_bbox[:, :, idx_npred].reshape(bs, -1)], dim=1) # bs, num_box, npred, 10d
+                z = self.wp_decoder(x_in, z) # torch.Size([1, 65])
+                dx = self.wp_output(z) # torch.Size([1, 2])
+                x = dx + x
+                output_wp.append(x)
+
+        pred_wp = torch.stack(output_wp, dim=1) # bs,4,2
+        pred_wp[:, :, 0] -= 1.3 # 变成了lidar系
+        return pred_wp
+
+class Wp_refine(nn.Module):
+    def __init__(self, head):
+        self.num_reg_fcs = head.num_reg_fcs
+        self.embed_dims = head.transformer.embed_dims
+        super(Wp_refine, self).__init__() # loss_cfg在里面
+        wp_branch = []
+        for _ in range(self.num_reg_fcs):
+            wp_branch.append(Linear(self.embed_dims, self.embed_dims))
+            wp_branch.append(nn.ReLU())
+        wp_branch.append(Linear(self.embed_dims, 8))
+        self.wp_branch = nn.Sequential(*wp_branch)
+    
+    def forward(self, cls_emb, tp_batch=None, light_batch=None, cmd_batch=None, batch_npred_bbox=None):
+        bs = len(cls_emb)
+        return self.wp_branch(cls_emb).reshape(bs, 4, 2)
+        
+    # def init_weights(self):
+    #     """Initialize weights of the DeformDETR head."""
+    #     self.transformer.init_weights()
+    #     if self.loss_cls.use_sigmoid:
+    #         bias_init = bias_init_with_prob(0.01)
+    #         for m in self.cls_branches:
+    #             nn.init.constant_(m[-1].bias, bias_init)
+
+class Penalty():
+    def __init__(self, 
+                use_route_penalty=False,
+                use_collide_penalty=False,
+                use_comfort_penalty=False,
+                use_progress_penalty=False,
+                 ):
+        self.use_route_penalty=use_route_penalty
+        self.use_collide_penalty=use_collide_penalty
+        self.use_comfort_penalty=use_comfort_penalty
+        self.use_progress_penalty=use_progress_penalty
+        if self.use_comfort_penalty:
+            self.comfort = Comfort()
+        if self.use_progress_penalty:
+            self.progress = Progress()
+    
+    def __call__(self, pred_wp, route_wp, iscollide, tp, losses, head):
+        if self.use_route_penalty:
+            losses_wp = F.l1_loss(pred_wp, route_wp, reduction='none').mean([1,2,3]) # 剩下不同layer了
+            losses_wp = losses_wp.mean()
+            losses.update(head.loss_add_prefix({"loss":losses_wp}, 'route_penalty'))
+        
+        if self.use_collide_penalty:
+            expect_wp = pred_wp.clone() # torch.Size([6, 1, 4, 2])
+            expect_wp[:,iscollide,...] = 0 
+            losses_wp = F.l1_loss(pred_wp, expect_wp, reduction='none').mean([1,2,3])
+            losses_wp = losses_wp.mean()
+            losses.update(head.loss_add_prefix({"loss":losses_wp}, 'collide_penalty'))
+        
+        if self.use_comfort_penalty:
+            # pred_wp torch.Size([layer=6, bs=2, npred=4, xy=2])
+            trajs = pred_wp.clone().permute(1,0,2,3)
+            loss = self.comfort(trajs).mean()/5 # torch.Size([2, 6]) 2个bs，6个层的轨迹的舒适度
+            losses.update(head.loss_add_prefix({"loss":loss}, 'comfort_penalty'))
+
+        if self.use_progress_penalty:
+            # pred_wp
+            trajs = pred_wp.clone().permute(1,0,2,3) # (B,1,n_future)
+            loss = self.progress(trajs, tp).mean()/300 # torch.Size([2, 6]) 刚开始时候特别大
+            losses.update(head.loss_add_prefix({"loss":loss}, 'progress_penalty'))
